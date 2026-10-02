@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.local
+
+# generated data
+data/raw/
+data/intermediate/
+data/picks/
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# excel lockfiles
+~$*.xlsx
+
+# local dashboard config (contains the publishable key only, still not committed)
+web/config.local.js
+
+# delivery artefacts — built from the repo, never part of it
+*.zip
+samples/
+
+# Word lock files
+~$*
+
+# run logs
+*.log
+run.txt
+
+# scratch
+.tmp_docx/

@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PropLine NHL — Daily Prop Intelligence</title>
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#0f1420; --panel:#141a26; --panel2:#1b2230; --line:#252e3f;
+    --text:#e9eef7; --muted:#8b99ae; --dim:#5d6b80;
+    --accent:#4ea1ff; --accent2:#7c8cff;
+    --good:#3ecf8e; --warn:#f5b942; --bad:#ff6b6b; --hot:#ff7a59;
+    --radius:12px;
+    --ease:cubic-bezier(.16,1,.3,1);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+
+  /* ── cursor glow ─────────────────────────────────────────────────────────
+     One element that trails the pointer. Cheap: transform only, no repaint. */
+  .glow{
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(420px circle at var(--mx,50%) var(--my,40%),
+               rgba(78,161,255,.09), transparent 65%);
+    transition:opacity .5s ease;opacity:0;
+  }
+  .glow.on{opacity:1}
+
+  /* ── hero ────────────────────────────────────────────────────────────── */
+  .hero{
+    position:relative;min-height:100svh;display:flex;flex-direction:column;
+    justify-content:center;align-items:center;text-align:center;
+    padding:80px 24px 60px;overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 50% -10%, rgba(124,140,255,.13), transparent 70%),
+      radial-gradient(700px 400px at 85% 110%, rgba(255,122,89,.09), transparent 70%),
+      var(--bg);
+  }
+  /* faint graph-paper grid, masked so it fades at the edges */
+  .hero::before{
+    content:'';position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size:64px 64px;
+    -webkit-mask-image:radial-gradient(closest-side at 50% 45%, #000 55%, transparent 100%);
+            mask-image:radial-gradient(closest-side at 50% 45%, #000 55%, transparent 100%);
+  }
+  /* the vertical seam through the wordmark, like a stadium foul line */
+  .hero::after{
+    content:'';position:absolute;top:0;bottom:0;left:50%;width:1px;
+    background:linear-gradient(180deg,transparent,rgba(255,255,255,.14) 30%,
+               rgba(255,255,255,.14) 70%,transparent);
+  }
+
+  .hero-nav{
+    position:absolute;top:0;left:0;right:0;padding:22px 28px;
+    display:flex;align-items:center;gap:14px;z-index:3;
+  }
+  .mark{
+    font-size:15px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;
+    background:linear-gradient(90deg,var(--hot),var(--warn) 45%,var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    cursor:pointer;
+  }
+  .ghost-btn{
+    margin-left:auto;padding:9px 18px;border-radius:99px;font-size:13.5px;
+    border:1px solid var(--line);background:transparent;color:var(--text);
+    cursor:pointer;transition:border-color .3s var(--ease),
+                background .3s var(--ease), transform .3s var(--ease);
+  }
+  .ghost-btn:hover{border-color:var(--accent);background:rgba(78,161,255,.08);
+                   transform:translateY(-1px)}
+
+  .hero-inner{position:relative;z-index:2;max-width:980px}
+  .eyebrow{
+    font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--dim);
+    margin:0 0 22px;
+  }
+  .wordmark{
+    margin:0;font-weight:900;line-height:.86;letter-spacing:-.03em;
+    font-size:clamp(58px,13vw,168px);
+    background:linear-gradient(100deg,var(--hot) 8%,var(--warn) 38%,
+               #9fd2c4 62%,var(--accent) 92%);
+    background-size:200% 100%;
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:sheen 14s ease-in-out infinite;
+  }
+  @keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+  .hero-sub{
+    margin:30px auto 0;max-width:560px;color:var(--muted);font-size:17px;
+  }
+  .cta{
+    margin-top:38px;position:relative;overflow:hidden;
+    padding:15px 34px;border-radius:99px;font-size:14px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+    color:var(--warn);background:transparent;border:1px solid rgba(245,185,66,.45);
+    transition:color .35s var(--ease),border-color .35s var(--ease),
+               transform .35s var(--ease),box-shadow .35s var(--ease);
+  }
+  .cta span{position:relative;z-index:2}
+  /* the fill sweeps in from the left on hover */
+  .cta::before{
+    content:'';position:absolute;inset:0;z-index:1;
+    background:linear-gradient(90deg,var(--warn),var(--hot));
+    transform:translateX(-101%);transition:transform .45s var(--ease);
+  }
+  .cta:hover{color:#171008;border-color:transparent;transform:translateY(-2px);
+             box-shadow:0 14px 34px rgba(245,185,66,.22)}
+  .cta:hover::before{transform:translateX(0)}
+  .cta:active{transform:translateY(0)}
+  .arrow{display:inline-block;transition:transform .35s var(--ease)}
+  .cta:hover .arrow{transform:translateX(5px)}
+
+  /* floating stat fragments — real metrics this tool actually uses */
+  .chip{
+    position:absolute;z-index:1;font-size:12.5px;font-weight:700;
+    letter-spacing:.1em;font-variant-numeric:tabular-nums;
+    color:var(--c,var(--dim));opacity:.5;white-space:nowrap;
+    animation:drift var(--d,17s) ease-in-out infinite;
+    animation-delay:var(--delay,0s);
+  }
+  @keyframes drift{
+    0%,100%{transform:translate3d(0,0,0)}
+    50%{transform:translate3d(0,-16px,0)}
+  }
+
+  .scroll-hint{
+    position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    color:var(--dim);font-size:20px;z-index:2;
+    animation:bob 2.4s ease-in-out infinite;
+  }
+  @keyframes bob{0%,100%{transform:translate(-50%,0);opacity:.45}
+                 50%{transform:translate(-50%,9px);opacity:.9}}
+
+  /* ── how it works ────────────────────────────────────────────────────── */
+  .how{padding:110px 24px 120px;background:var(--bg2);position:relative;z-index:1}
+  .how-head{text-align:center;max-width:760px;margin:0 auto 58px}
+  .how-head .eyebrow{margin-bottom:16px}
+  .how-head h2{margin:0;font-size:clamp(26px,4.2vw,42px);letter-spacing:-.02em;
+               font-weight:800}
+  .cards{display:grid;gap:20px;max-width:1120px;margin:0 auto;
+         grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{
+    position:relative;padding:30px 26px 28px;border-radius:var(--radius);
+    background:linear-gradient(180deg,var(--panel),rgba(20,26,38,.6));
+    border:1px solid var(--line);overflow:hidden;
+    transition:transform .45s var(--ease),border-color .45s var(--ease),
+               box-shadow .45s var(--ease);
+  }
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+                background:var(--c);opacity:.85}
+  .card:hover{transform:translateY(-6px);border-color:color-mix(in srgb,var(--c) 45%,var(--line));
+              box-shadow:0 18px 44px rgba(0,0,0,.42)}
+  .card .n{font-size:13px;font-weight:800;color:var(--c);letter-spacing:.12em}
+  .card h3{margin:12px 0 10px;font-size:20px;letter-spacing:-.01em}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+
+  /* ── scroll reveal ───────────────────────────────────────────────────────
+     Hiding is gated behind .js-reveal, which the script adds to <html> only
+     once it has an observer ready. If the script fails, never loads, or the
+     browser lacks IntersectionObserver, the copy is simply visible — the one
+     unacceptable outcome here is a permanently blank section. */
+  .js-reveal .reveal{opacity:0;transform:translateY(26px);
+          transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .js-reveal .reveal.in{opacity:1;transform:none}
+  .reveal[data-d="1"]{transition-delay:.09s}
+  .reveal[data-d="2"]{transition-delay:.18s}
+  .reveal[data-d="3"]{transition-delay:.27s}
+
+  /* ── routing ─────────────────────────────────────────────────────────────
+     Two views, one on screen at a time, crossfaded. Hash-based rather than
+     pushState paths: Netlify would 404 on a refresh of /board without a
+     catch-all redirect, and a catch-all risks swallowing the /api/* function
+     routes. A hash costs nothing and cannot break the API. */
+  .view{display:none;opacity:0;transition:opacity .32s var(--ease)}
+  .view.active{display:block;opacity:1}
+  .view.leaving{opacity:0}
+  body.switching{overflow:hidden}
+
+  /* ── dashboard ───────────────────────────────────────────────────────── */
+  #app{position:relative;z-index:1;background:var(--bg)}
+  header{
+    background:rgba(20,26,38,.82);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);padding:14px 20px;
+    position:sticky;top:0;z-index:20;transition:padding .35s var(--ease);
+  }
+  header.tight{padding:9px 20px}
+  .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .brand{font-size:19px;font-weight:800;letter-spacing:-.2px;cursor:pointer}
+  .brand span{
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .spacer{flex:1}
+  .meta{font-size:13px;color:var(--muted)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;
+         font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .b-conf{background:rgba(62,207,142,.15);color:var(--good)}
+  .b-proj{background:rgba(245,185,66,.15);color:var(--warn)}
+  .b-err{background:rgba(255,107,107,.15);color:var(--bad)}
+  .b-scr{background:rgba(255,107,107,.15);color:var(--bad);text-decoration:line-through}
+
+  button,select,input{font:inherit;color:var(--text);background:var(--panel2);
+        border:1px solid var(--line);border-radius:9px;padding:8px 12px;
+        transition:border-color .3s var(--ease),background .3s var(--ease),
+                   transform .2s var(--ease),box-shadow .3s var(--ease)}
+  button{cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--accent);transform:translateY(-1px);
+                              box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  button:active:not(:disabled){transform:translateY(0)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  input:focus,select:focus{outline:none;border-color:var(--accent);
+                           box-shadow:0 0 0 3px rgba(78,161,255,.14)}
+  .primary{background:linear-gradient(135deg,var(--accent),var(--accent2));
+           border-color:transparent;color:#fff;font-weight:700}
+  .primary:hover:not(:disabled){box-shadow:0 8px 24px rgba(78,161,255,.32)}
+
+  main{padding:20px;max-width:1500px;margin:0 auto}
+  .tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+  .tab{
+    padding:8px 15px;border-radius:9px;background:var(--panel);
+    border:1px solid var(--line);cursor:pointer;font-size:14px;position:relative;
+    transition:background .3s var(--ease),border-color .3s var(--ease),
+               color .3s var(--ease),transform .25s var(--ease);
+  }
+  .tab:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .tab.on{background:linear-gradient(135deg,var(--accent),var(--accent2));
+          border-color:transparent;color:#fff;font-weight:700}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .wrap{background:var(--panel);border:1px solid var(--line);
+        border-radius:var(--radius);overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+  th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);
+        white-space:nowrap}
+  th{background:var(--panel2);font-size:11.5px;text-transform:uppercase;
+     letter-spacing:.5px;color:var(--muted);font-weight:700;position:sticky;top:0}
+  tbody tr{transition:background .22s var(--ease)}
+  tbody tr:hover{background:var(--panel2)}
+  /* the left edge lights up on hover — cheap way to make rows feel touchable */
+  tbody tr td:first-child{box-shadow:inset 2px 0 0 transparent;
+                          transition:box-shadow .25s var(--ease)}
+  tbody tr:hover td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+  tbody tr:last-child td{border-bottom:none}
+
+  /* rows fade in staggered whenever the board re-renders */
+  @keyframes rowIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  tbody tr{animation:rowIn .42s var(--ease) both;animation-delay:calc(var(--i,0)*22ms)}
+
+  .rank{color:var(--dim);font-variant-numeric:tabular-nums;width:46px}
+  .name{font-weight:650}
+  .score{font-weight:800;font-variant-numeric:tabular-nums}
+  .s-hi{color:var(--good)} .s-mid{color:var(--warn)} .s-lo{color:var(--muted)}
+  .why{white-space:normal;color:var(--muted);min-width:290px;max-width:470px;
+       font-size:13.5px}
+  .num{font-variant-numeric:tabular-nums;color:var(--muted)}
+  .empty{padding:48px;text-align:center;color:var(--muted)}
+  .more-row{display:flex;align-items:center;gap:14px;margin-top:14px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,14px);
+         background:var(--panel);border:1px solid var(--line);padding:12px 19px;
+         border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.5);z-index:60;
+         max-width:90vw;opacity:0;pointer-events:none;
+         transition:opacity .35s var(--ease),transform .35s var(--ease)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .hidden{display:none}
+  .thin{color:var(--warn)}
+  /* Bullpen fatigue reads at a glance: a worked pen is the thing most likely to
+     turn a quiet total into a loud one late. */
+  .pen-rested{color:var(--good)}
+  .pen-average{color:var(--muted)}
+  .pen-overworked{color:var(--bad);font-weight:600}
+  /* Expandable pitch arsenal on the Strikeouts board. */
+  .ars-toggle{cursor:pointer;user-select:none}
+  .ars-toggle .caret{display:inline-block;width:1em;color:var(--muted);
+    transition:transform .18s ease}
+  .ars-toggle.open .caret{transform:rotate(90deg)}
+  .ars-row>td{padding:0 0 14px 0;background:rgba(255,255,255,.02)}
+  /* Grid, not flex. A flex item is sized by its content, so the inner width:100%
+     table resolved against an indefinite width and overflowed into the panel beside
+     it. Grid tracks have definite widths, so the fixed-layout table lands exactly in
+     its track; auto-fit collapses to one column on a narrow screen. */
+  .ars-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:26px;padding:12px 18px 4px}
+  /* min-width:0 overrides a grid item's auto minimum, so the table is governed by the
+     track rather than by its own content. */
+  .ars-side{min-width:0}
+  .ars-side h4{margin:0 0 6px;font-size:.72rem;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted)}
+  /* table-layout:fixed is required, not cosmetic: an auto-layout table cannot shrink
+     below its content, so inside a 300px flex item it overflows into the panel beside
+     it and the two sides render on top of each other. */
+  .ars-side table{width:100%;border-collapse:collapse;font-size:.8rem;
+    table-layout:fixed;
+    /* Overrides the global `table{min-width:760px}` on line ~239, which exists to make
+       the main board scroll horizontally. Inherited here it pinned each nested table
+       to 760px inside a 494px grid track, so the two sides rendered on top of each
+       other. Measured, not guessed: computed width was 760px against a 494px track. */
+    min-width:0}
+  /* Fixed layout splits columns evenly, which truncated "4-Seam Fastball" at a width
+     that had room for it. Give the name a third and let the four numbers share the
+     rest; the ellipsis stays as the backstop for a genuinely long pitch name. */
+  .ars-side th:first-child,.ars-side td:first-child{width:34%}
+  .ars-side td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ars-side td,.ars-side th{padding:3px 8px 3px 0;text-align:left;
+    border-bottom:1px solid rgba(255,255,255,.05)}
+  .ars-side th{color:var(--muted);font-weight:500}
+  .ars-side .n{text-align:right;font-variant-numeric:tabular-nums}
+  .ars-thin{color:var(--muted)}
+  .ars-note{padding:2px 18px 0;font-size:.72rem;color:var(--muted)}
+
+  footer{padding:34px 24px;border-top:1px solid var(--line);color:var(--dim);
+         font-size:13px;display:flex;gap:14px;flex-wrap:wrap;
+         max-width:1500px;margin:0 auto}
+
+  /* ── modal ───────────────────────────────────────────────────────────── */
+  .scrim{
+    position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:24px;
+    background:rgba(6,9,14,.72);backdrop-filter:blur(4px);
+    opacity:0;pointer-events:none;transition:opacity .28s var(--ease);
+  }
+  .scrim.show{opacity:1;pointer-events:auto}
+  .modal{
+    width:min(430px,100%);background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;padding:26px;box-shadow:0 26px 70px rgba(0,0,0,.6);
+    transform:translateY(12px) scale(.98);
+    transition:transform .32s var(--ease);
+  }
+  .scrim.show .modal{transform:none}
+  .modal h3{margin:0 0 8px;font-size:19px;letter-spacing:-.01em}
+  .modal p{margin:0 0 18px;color:var(--muted);font-size:14px}
+  .modal input{width:100%;margin-bottom:14px}
+  .modal .err{color:var(--bad);font-size:13px;margin:-8px 0 12px;display:none}
+  .modal .err.show{display:block}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
+  /* Anyone who has asked their OS to calm animations down gets a static site.
+     Everything still works; it just stops moving. */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    html{scroll-behavior:auto}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="glow" id="glow"></div>
+
+<!-- ── landing view ──────────────────────────────────────────────────── -->
+<div class="view" id="view-landing">
+<section class="hero" id="hero">
+  <nav class="hero-nav">
+    <div class="mark" data-top>PropLine NHL</div>
+    <button class="ghost-btn" data-enter>Open Dashboard</button>
+  </nav>
+
+  <div id="chips"></div>
+
+  <div class="hero-inner">
+    <p class="eyebrow">MLB Prop Betting · Daily Automation</p>
+    <h1 class="wordmark">PROP<br>LINE</h1>
+    <p class="hero-sub">
+      Every hitter measured against the pitch mix he actually faces today.
+      Ranked before first pitch, not after.
+    </p>
+    <button class="cta" data-enter>
+      <span>Open Dashboard <i class="arrow">→</i></span>
+    </button>
+  </div>
+
+  <div class="scroll-hint">↓</div>
+</section>
+
+<!-- ── how it works ──────────────────────────────────────────────────── -->
+<section class="how" id="how">
+  <div class="how-head reveal">
+    <p class="eyebrow">How it works</p>
+    <h2>From twenty minutes of downloads to one ranked board</h2>
+  </div>
+  <div class="cards">
+    <div class="card reveal" data-d="1" style="--c:#ff6b6b">
+      <div class="n">01</div>
+      <h3>Pull the whole slate</h3>
+      <p>Every Baseball Savant leaderboard, last-5 and last-10 splits by pitcher
+         hand, confirmed lineups, bullpen availability and park factors —
+         collected automatically, five times a day.</p>
+    </div>
+    <div class="card reveal" data-d="2" style="--c:#f5b942">
+      <div class="n">02</div>
+      <h3>Match bat against arsenal</h3>
+      <p>A pitcher throws a specific mix. A hitter has a record against each pitch
+         type. Weighting one by the other shows how he fares against
+         <em>this</em> starter, not against pitching in general.</p>
+    </div>
+    <div class="card reveal" data-d="3" style="--c:#4ea1ff">
+      <div class="n">03</div>
+      <h3>Rank, then explain</h3>
+      <p>Hits, total bases, home runs, RBIs, runs, strikeouts and game totals —
+         scored on the numbers, each with a one-line reason you can check.</p>
+    </div>
+  </div>
+</section>
+</div>
+
+<!-- ── dashboard view ────────────────────────────────────────────────── -->
+<div class="view" id="app">
+<header id="hdr">
+  <div class="row">
+    <div class="brand" data-top>Prop<span>Line</span> MLB</div>
+    <select id="slate" title="Slate date"></select>
+    <div class="spacer"></div>
+    <div class="meta" id="freshness">loading…</div>
+    <button id="refresh">Refresh</button>
+    <button id="update" class="primary" title="Re-run the full pipeline now">Update Now</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div class="meta" id="slateinfo"></div>
+  </div>
+</header>
+
+<main>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="controls">
+    <input id="search" placeholder="Filter by player, team or opponent…" style="min-width:280px">
+    <select id="teamfilter"><option value="">All teams</option></select>
+    <select id="statusfilter">
+      <option value="">Any lineup status</option>
+      <option value="confirmed">Confirmed only</option>
+      <option value="projected">Projected only</option>
+      <option value="scratched">Scratched only</option>
+    </select>
+    <div class="spacer"></div>
+    <button id="xlsx" title="The full generated workbook: every category on its own tab">Download Excel</button>
+    <button id="csv" title="Just the rows currently shown, as CSV">Download CSV</button>
+  </div>
+
+  <div class="wrap">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty hidden" id="empty">Nothing to show for this slate yet.</div>
+  </div>
+
+  <div class="more-row">
+    <button id="more" class="hidden"></button>
+    <span class="meta" id="count"></span>
+  </div>
+</main>
+
+<footer>
+  <div>PropLine NHL</div>
+  <div class="spacer"></div>
+  <div>Stats from Baseball Savant &amp; the MLB Stats API · rankings are a model, not advice</div>
+</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Confirm / passphrase dialog. Replaces the browser prompt(), which cannot be
+     styled and looks alarming for a routine action. -->
+<div class="scrim" id="scrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+    <h3 id="mt">Start a pipeline run?</h3>
+    <p id="mbody">This re-pulls today's data and rebuilds every board.
+       It takes roughly 5–10 minutes.</p>
+    <input id="msecret" type="password" placeholder="Passphrase" class="hidden"
+           autocomplete="current-password">
+    <div class="err" id="merr"></div>
+    <div class="modal-actions">
+      <button id="mcancel">Cancel</button>
+      <button id="mok" class="primary">Start run</button>
+    </div>
+  </div>
+</div>
+
+<!-- Local development only; absent when hosted, where /api/config supplies the values.
+     onerror keeps the console clean when the file legitimately does not exist. -->
+<script src="config.local.js" onerror="void 0"></script>
+
+<script>
+const PROPS = [
+  {key:'hits',         label:'Hits',        kind:'player'},
+  {key:'total_bases',  label:'Total Bases', kind:'player'},
+  {key:'home_runs',    label:'Home Runs',   kind:'player'},
+  {key:'rbis',         label:'RBIs',        kind:'player'},
+  {key:'runs',         label:'Runs',        kind:'player'},
+  {key:'strikeouts',   label:'Strikeouts',  kind:'player'},
+  {key:'game_total',   label:'Game Totals', kind:'game'},
+  {key:'team_total',   label:'Team Totals', kind:'game'},
+];
+
+let CFG = null, current = 'total_bases', rows = [], slateDate = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, ms=4200){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+/* ── presentation ──────────────────────────────────────────────────────
+   Everything below is decoration. None of it touches the data path, so a
+   failure here can never cost the client a pick. */
+
+// Real metrics from this tool, scattered around the hero. Positions are fixed
+// rather than random so nothing ever lands on top of the wordmark.
+const CHIPS = [
+  ['xwOBA .462', 8,  16, '#ff6b6b'], ['BARREL% 15.0', 84, 22, '#4ea1ff'],
+  ['L10 FORM',    5,  40, '#f5b942'], ['HARD-HIT 44%', 88, 46, '#3ecf8e'],
+  ['K/9 11.3',    11, 66, '#7c8cff'], ['PARK 128',     86, 68, '#ff7a59'],
+  ['WHIFF% 37',   16, 84, '#3ecf8e'], ['CONFIRMED',    80, 86, '#f5b942'],
+];
+function paintChips(){
+  $('#chips').innerHTML = CHIPS.map(([t,x,y,c],i)=>
+    `<div class="chip" style="left:${x}%;top:${y}%;--c:${c};
+      --d:${14+i*1.6}s;--delay:${i*.45}s">${t}</div>`).join('');
+}
+
+// Pointer glow. Written straight to a CSS variable and rAF-throttled, so it
+// costs one composite per frame at most.
+function initGlow(){
+  const g = $('#glow'); let queued = false, x = 0, y = 0;
+  addEventListener('pointermove', e => {
+    x = e.clientX; y = e.clientY;
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(()=>{
+      g.style.setProperty('--mx', x+'px');
+      g.style.setProperty('--my', y+'px');
+      g.classList.add('on'); queued = false;
+    });
+  }, {passive:true});
+}
+
+// Safe to call on every view change: anything already revealed is skipped, so
+// re-entering the landing page does not replay the animation.
+function initReveal(){
+  const els = [...document.querySelectorAll('.reveal:not(.in)')];
+  if (!els.length) return;
+
+  // No observer support, or motion turned down at the OS level: show everything
+  // now and skip the animation entirely.
+  if (!('IntersectionObserver' in window) ||
+      matchMedia('(prefers-reduced-motion: reduce)').matches){
+    els.forEach(el=>el.classList.add('in'));
+    return;
+  }
+
+  document.documentElement.classList.add('js-reveal');
+  const io = new IntersectionObserver(entries=>{
+    entries.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in');
+                                                 io.unobserve(en.target); } });
+  }, {threshold:.16, rootMargin:'0px 0px -8% 0px'});
+  els.forEach(el=>io.observe(el));
+
+  // Failsafe. A backgrounded tab produces no frames, so observer callbacks never
+  // arrive; the same is true of a few older mobile browsers. Rather than leave the
+  // section blank forever, reveal anything still hidden after three seconds.
+  setTimeout(()=>els.forEach(el=>el.classList.add('in')), 3000);
+}
+
+function initHeader(){
+  const hdr = $('#hdr');
+  addEventListener('scroll', ()=>{
+    hdr.classList.toggle('tight', hdr.getBoundingClientRect().top <= 0
+                                  && scrollY > innerHeight);
+  }, {passive:true});
+}
+
+/* ── router ─────────────────────────────────────────────────────────────
+   Two views that swap, rather than one long scroll. The board is the working
+   surface and gets the whole window; the landing page is the front door.
+   Uses the hash so a refresh, a bookmark and the back button all behave, with
+   no server-side rewrite that could interfere with the /api/* functions. */
+
+let currentView = null;
+
+function showView(name, animate=true){
+  if (currentView === name) return;
+  const next = name === 'board' ? $('#app') : $('#view-landing');
+  const prev = currentView === 'board' ? $('#app')
+             : currentView ? $('#view-landing') : null;
+
+  const paint = () => {
+    if (prev){ prev.classList.remove('active','leaving'); }
+    next.classList.add('active');
+    // start each view at the top; a view arriving mid-scroll feels broken
+    scrollTo({top:0, behavior:'auto'});
+    currentView = name;
+    document.body.classList.remove('switching');
+    // Reveal animations belong to whichever view just appeared. Called directly
+    // rather than inside rAF: a backgrounded tab never runs rAF, which would
+    // leave the copy hidden until the failsafe fired.
+    initReveal();
+  };
+
+  if (!prev || !animate){ paint(); return; }
+
+  document.body.classList.add('switching');
+  prev.classList.add('leaving');
+  // fall back to a timer so a missed transitionend can never strand the user
+  let done = false;
+  const finish = () => { if (done) return; done = true; paint(); };
+  prev.addEventListener('transitionend', finish, {once:true});
+  setTimeout(finish, 420);
+}
+
+function routeFromHash(animate){
+  showView(location.hash === '#board' ? 'board' : 'landing', animate);
+}
+
+function initNav(){
+  document.querySelectorAll('[data-enter]').forEach(b=>
+    b.addEventListener('click', ()=>{
+      localStorage.setItem('propline_seen', '1');
+      location.hash = '#board';
+    }));
+  document.querySelectorAll('[data-top]').forEach(b=>
+    b.addEventListener('click', ()=>{
+      // history.back would be wrong when the board was opened directly
+      location.hash = '';
+    }));
+
+  addEventListener('hashchange', ()=>routeFromHash(true));
+
+  // Devin opens this every morning and should land on the board, not on a
+  // splash screen he has already read. First visit gets the front door.
+  if (!location.hash && localStorage.getItem('propline_seen')){
+    history.replaceState(null, '', '#board');
+  }
+  routeFromHash(false);
+}
+
+/* ── confirm / passphrase dialog ────────────────────────────────────────
+   The passphrase stays: /api/trigger is a public URL, and without a gate
+   anyone who finds it can spend the client's GitHub Actions minutes and
+   hammer Baseball Savant from his account. But it is asked for once, inside
+   the dialog, instead of through a browser prompt() on every run. */
+
+function askRun({needSecret, error}){
+  return new Promise(resolve=>{
+    const scrim = $('#scrim'), input = $('#msecret'), err = $('#merr');
+    input.classList.toggle('hidden', !needSecret);
+    input.value = '';
+    $('#mbody').textContent = needSecret
+      ? 'Enter the passphrase to start a run. It is remembered on this device, so you will only be asked once.'
+      : "This re-pulls today's data and rebuilds every board. It takes roughly 5–10 minutes.";
+    err.textContent = error || '';
+    err.classList.toggle('show', !!error);
+
+    scrim.classList.add('show');
+    if (needSecret) setTimeout(()=>input.focus(), 260);
+
+    const close = value => {
+      scrim.classList.remove('show');
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const ok = () => close(needSecret ? (input.value.trim() || null) : true);
+    const onKey = e => {
+      if (e.key === 'Escape') close(null);
+      if (e.key === 'Enter' && scrim.classList.contains('show')) ok();
+    };
+
+    $('#mok').onclick = ok;
+    $('#mcancel').onclick = () => close(null);
+    scrim.onclick = e => { if (e.target === scrim) close(null); };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+/* ── data ──────────────────────────────────────────────────────────────── */
+
+async function loadConfig(){
+  // Hosted: /api/config serves the public values from environment variables, so the
+  // repo never contains even the publishable key. Local: drop a git-ignored
+  // web/config.local.js that sets window.PROPLINE_CONFIG.
+  if (window.PROPLINE_CONFIG) return window.PROPLINE_CONFIG;
+  const r = await fetch('/api/config');
+  if (!r.ok) throw new Error('No config. Create web/config.local.js for local use.');
+  return r.json();
+}
+
+async function sb(table, params){
+  const url = new URL(`${CFG.supabaseUrl}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+  const r = await fetch(url, {headers:{
+    apikey: CFG.supabaseAnonKey,
+    Authorization: `Bearer ${CFG.supabaseAnonKey}`,
+  }});
+  if (!r.ok) throw new Error(`${table}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function loadSlates(){
+  const runs = await sb('pipeline_runs',
+    // Rows, not days. Each slate writes a run row per collection and per processing
+    // pass, several times a day, so a 60-row limit silently capped the date picker at
+    // about six days of history. 2000 covers a full season.
+    {select:'slate_date', order:'slate_date.desc', limit:2000});
+  const dates = [...new Set(runs.map(r=>r.slate_date))];
+  const sel = $('#slate');
+  sel.innerHTML = dates.map(d=>`<option value="${d}">${d}</option>`).join('')
+                  || '<option>no data</option>';
+  slateDate = slateDate && dates.includes(slateDate) ? slateDate : dates[0];
+  if (slateDate) sel.value = slateDate;
+}
+
+async function loadFreshness(){
+  if (!slateDate) return;
+  const runs = await sb('pipeline_runs', {select:'*', slate_date:`eq.${slateDate}`,
+                                          order:'id.desc', limit:20});
+  const last = runs[0];
+  if (!last){ $('#freshness').textContent = 'never run'; return; }
+
+  const when = new Date(last.finished_at);
+  const mins = Math.round((Date.now() - when) / 60000);
+  const ago = mins < 1 ? 'just now'
+            : mins < 60 ? `${mins} min ago`
+            : `${Math.floor(mins/60)}h ${mins%60}m ago`;
+  const failed = runs.some(r => r.status === 'failed' && r.slate_date === slateDate
+                                && r.id > (runs.find(x=>x.status==='ok')?.id ?? -1));
+  $('#freshness').innerHTML =
+    `updated <strong>${ago}</strong> · ${esc(runLabel(last.run_type))}` +
+    (failed ? ' <span class="badge b-err">last run failed</span>' : '');
+
+  const counts = await sb('lineups',
+    {select:'status', game_date:`eq.${slateDate}`}).catch(()=>[]);
+  const conf = counts.filter(r=>r.status==='confirmed').length;
+  const proj = counts.filter(r=>r.status==='projected').length;
+  const scr  = counts.filter(r=>r.status==='scratched').length;
+  const games = await sb('games', {select:'game_pk', game_date:`eq.${slateDate}`})
+                      .catch(()=>[]);
+  $('#slateinfo').innerHTML =
+    `${games.length} games · ` +
+    (conf ? `<span class="badge b-conf">${conf} confirmed</span> ` : '') +
+    (proj ? `<span class="badge b-proj">${proj} projected</span>` : '') +
+    (scr ? ` <span class="badge b-scr">${scr} scratched</span>` : '') +
+    (proj && !conf ? ' — confirmed lineups post 2–4h before first pitch' : '');
+}
+
+async function loadProp(){
+  const prop = PROPS.find(p=>p.key===current);
+  const table = prop.kind === 'player' ? 'prop_picks' : 'game_picks';
+  rows = await sb(table, {select:'*', slate_date:`eq.${slateDate}`,
+                          prop:`eq.${current}`, order:'rank.asc'});
+  buildTeamFilter();
+  render();
+}
+
+function buildTeamFilter(){
+  const teams = [...new Set(rows.map(r=>r.team).filter(Boolean))].sort();
+  const sel = $('#teamfilter'), keep = sel.value;
+  sel.innerHTML = '<option value="">All teams</option>' +
+    teams.map(t=>`<option>${esc(t)}</option>`).join('');
+  if (teams.includes(keep)) sel.value = keep;
+}
+
+function filtered(){
+  const q = $('#search').value.trim().toLowerCase();
+  const team = $('#teamfilter').value;
+  const status = $('#statusfilter').value;
+  return rows.filter(r=>{
+    const hay = [r.subject_name, r.subject, r.team, r.opponent, r.venue]
+                  .filter(Boolean).join(' ').toLowerCase();
+    if (q && !hay.includes(q)) return false;
+    if (team && r.team !== team) return false;
+    if (status && (r.lineup_status||'') !== status) return false;
+    return true;
+  });
+}
+
+// Scores are already percentile-based, so these bands are just a reading aid.
+const scoreClass = s => s >= 80 ? 's-hi' : s >= 60 ? 's-mid' : 's-lo';
+
+// The database now holds every scored player, not just the top 40, so that the
+// filters actually work — but nobody wants to scroll 270 rows to reach the controls.
+// Show a useful chunk, with an explicit way to see the rest.
+const PAGE_ROWS = 60;
+let showAll = false;
+
+// Per-prop columns, mirroring propline/output.py. In v2 the props are scored on
+// genuinely different inputs — total bases takes the better of two paths, home runs
+// weigh a matchup matrix and a barrel cap, strikeouts are about the lineup faced — so
+// a single shared column set would hide the numbers that actually drive each board.
+//
+// `get` reads from the pick row first, then its details blob. `fmt` is optional.
+const pct1 = v => v == null ? '' : `${(+v).toFixed(1)}%`;
+const num3 = v => v == null ? '' : (+v).toFixed(3);
+const yesNo = v => v === true ? 'yes' : v === false ? '' : (v ?? '');
+const tempF = v => v == null ? '' : `${Math.round(+v)}°F`;
+
+// The pipeline records which slot produced a run. Show it in words — the raw
+// values (scheduled_morning, ...) are for the database, not the header.
+const RUN_LABELS = {
+  scheduled_morning:   'morning run',
+  scheduled_midday:    'midday run',
+  scheduled_afternoon: 'afternoon run',
+  scheduled_evening:   'evening run',
+  scheduled_late:      'late run',
+  manual:              'manual run',
+};
+const runLabel = k => RUN_LABELS[k] || k || 'run';
+
+const EXTRA_COLS = {
+  // Totals boards. v2 adds the bullpen-fatigue and weather signals the client asked
+  // for, so a worked pen or a pitching duel is visible without opening the workbook.
+  game_total: [
+    ['Home Pen', 'pen_status_home'],
+    ['Away Pen', 'pen_status_away'],
+    ['Starters WHIP / K9', 'starter_whip_k9'],
+    ['Temp', 'temp_f', tempF],
+    ['Wind', 'wind'],
+  ],
+  team_total: [
+    ['Opp Pen', 'opp_pen_status'],
+    ['Opp SP WHIP / K9', 'starter_whip_k9'],
+    ['Temp', 'temp_f', tempF],
+    ['Wind', 'wind'],
+  ],
+  hits: [
+    ['Recent xwOBA', 'recent_xwoba', num3],
+    ['Contact% (14d)', 'contact_rate_recent', pct1],
+    ['Line Drive%', 'line_drive_rate', pct1],
+    ['Ground Ball%', 'ground_ball_rate', pct1],
+    ['GB Penalty', 'gb_penalty'],
+    ['SP WHIP', 'starter_whip', num3],
+    ['SP Whiff', 'starter_whiff_matchup'],
+  ],
+  total_bases: [
+    ['Path', 'tb_path'],
+    ['Power', 'tb_power_score'],
+    ['Volume', 'tb_volume_score'],
+    ['Strict 2+', 'tb_strict', yesNo],
+    ['ISO (14d)', 'iso_recent_14day', num3],
+    ['Barrel%', 'recent_barrel_pct', pct1],
+    ['Matchup', 'pitch_matchup_grade'],
+  ],
+  home_runs: [
+    ['Arsenal RV', 'hr_matchup_rv', num3],
+    ['Barrel%', 'recent_barrel_pct', pct1],
+    ['Fly Ball%', 'fly_ball_rate', pct1],
+    ['ISO (14d)', 'iso_recent_14day', num3],
+    ['Suppression', 'pitcher_barrel_suppression_flag'],
+    ['Capped', 'hr_suppression_capped', yesNo],
+    ['Matchup', 'pitch_matchup_grade'],
+  ],
+  rbis: [
+    ['Table-Setter OBP', 'table_setter_obp', num3],
+    ['Lineup Ctx', 'context_mult'],
+    ['vs Arsenal xSLG', 'matchup_est_slg', num3],
+    ['Matchup', 'pitch_matchup_grade'],
+  ],
+  runs: [
+    ['Top-Order OBP', 'top_order_obp', num3],
+    ['Table-Setter OBP', 'table_setter_obp', num3],
+    ['Lineup Ctx', 'context_mult'],
+    ['Matchup', 'pitch_matchup_grade'],
+  ],
+  strikeouts: [
+    ['Split K', 'split_k_rate_matchup'],
+    ['Whiff% (14d)', 'whiff_14day', pct1],
+    ['Opp Lineup K%', 'opp_lineup_k_pct', pct1],
+    ['WHIP', 'pitcher_whip', num3],
+    ['Vegas K', 'vegas_k_line'],
+    ['Exp. Pitches', 'expected_pitch_limit'],
+    ['Leash', 'leash_penalty'],
+  ],
+};
+
+function cellValue(row, key, fmt){
+  const d = row.details || {};
+  const v = row[key] !== undefined ? row[key] : d[key];
+  if (v == null || v === '') return '';
+  return fmt ? fmt(v) : v;
+}
+
+// The starter's top 3 pitches to each side, shipped inside the pick's details JSON
+// rather than a table of its own. Rates come from the ~3-week raw window, so a thin
+// sample is shown greyed with a dash instead of a number it cannot support.
+function arsenalPanel(arsenal, cols){
+  const side = label => {
+    const rows = arsenal.filter(a => a.side === label);
+    if (!rows.length) return '';
+    return `<div class="ars-side"><h4>${esc(label)}</h4><table>
+      <tr><th>Pitch</th><th class="n">Usage</th><th class="n">Velo</th>
+          <th class="n">Whiff</th><th class="n">xwOBA</th></tr>
+      ${rows.map(a=>`<tr class="${a.ok?'':'ars-thin'}">
+        <td>${esc(a.pitch||'')}</td>
+        <td class="n">${a.usage!=null?a.usage.toFixed(1)+'%':'—'}</td>
+        <td class="n">${a.velo!=null?a.velo.toFixed(1):'—'}</td>
+        <td class="n">${a.ok&&a.whiff!=null?a.whiff.toFixed(1)+'%':'—'}</td>
+        <td class="n">${a.ok&&a.xwoba!=null?a.xwoba.toFixed(3):'—'}</td></tr>`).join('')}
+    </table></div>`;
+  };
+  const thin = arsenal.some(a=>!a.ok);
+  return `<td colspan="${cols}"><div class="ars-wrap">${side('vs LHB')}${side('vs RHB')}</div>
+    ${thin?'<div class="ars-note">Dashes: too few pitches in the recent window to quote a rate.</div>':''}</td>`;
+}
+
+function render(){
+  const prop = PROPS.find(p=>p.key===current);
+  const all = filtered();
+  const data = showAll ? all : all.slice(0, PAGE_ROWS);
+  const isPlayer = prop.kind === 'player';
+  const extra = EXTRA_COLS[current] || [];
+
+  $('#thead').innerHTML = isPlayer
+    ? `<tr><th>#</th><th>${current==='strikeouts'?'Pitcher':'Player'}</th><th>Team</th>
+       <th>${current==='strikeouts'?'Opponent':'Opposing SP'}</th><th>Score</th>
+       ${current==='strikeouts'?'':'<th>Lineup</th>'}<th>Recent</th>
+       ${extra.map(c=>`<th>${esc(c[0])}</th>`).join('')}<th>Why</th></tr>`
+    : `<tr><th>#</th><th>Matchup</th><th>Venue</th><th>Score</th>
+       <th>Vegas</th><th>vs Vegas</th><th>Park Runs</th>
+       ${extra.map(c=>`<th>${esc(c[0])}</th>`).join('')}<th>Why</th></tr>`;
+
+  $('#tbody').innerHTML = data.map((r,i)=>{
+    const d = r.details || {};
+    // cap the stagger so a 200-row board still finishes animating promptly
+    const st = `style="--i:${Math.min(i,26)}"`;
+    if (!isPlayer){
+      const pf = r.park_runs ?? '—';
+      const flag = r.park_matched === false ? ' <span class="thin">(no park data)</span>' : '';
+      return `<tr ${st}>
+        <td class="rank">${r.rank}</td>
+        <td class="name">${esc(r.subject)}</td>
+        <td class="num">${esc(r.venue||'')}</td>
+        <td class="score ${scoreClass(r.score)}">${r.score}</td>
+        <td class="num">${esc(cellValue(r,'vegas_total'))}</td>
+        <td class="num">${esc(cellValue(r,'vs_vegas'))}</td>
+        <td class="num">${pf}${flag}</td>
+        ${extra.map(([, key, fmt]) => {
+          const val = cellValue(r, key, fmt);
+          const tint = key.includes('pen_status') ? ` pen-${String(val).toLowerCase()}` : '';
+          return `<td class="num${tint}">${esc(val)}</td>`;
+        }).join('')}
+        <td class="why">${esc(r.rationale||'')}</td></tr>`;
+    }
+    const games = d.recent_games;
+    const thin = games != null && games < 7;
+    const badge = r.lineup_status === 'confirmed'
+      ? '<span class="badge b-conf">confirmed</span>'
+      : r.lineup_status === 'projected'
+        ? '<span class="badge b-proj">projected</span>'
+      : r.lineup_status === 'scratched'
+        ? '<span class="badge b-scr">scratched</span>' : '';
+    const cells = extra.map(([, key, fmt]) =>
+      `<td class="num">${esc(cellValue(r, key, fmt))}</td>`).join('');
+    const ars = current==='strikeouts' && Array.isArray(d.arsenal) && d.arsenal.length
+      ? d.arsenal : null;
+    // strikeouts has no Lineup column, hence 7 fixed columns rather than 8
+    const colCount = 7 + extra.length;
+    const arsRow = ars
+      ? `<tr class="ars-row hidden" data-ars-for="${i}">${arsenalPanel(ars, colCount)}</tr>`
+      : '';
+    return `<tr ${st}${ars?` class="ars-toggle" data-ars="${i}"`:''}>
+      <td class="rank">${r.rank}</td>
+      <td class="name">${ars?'<span class="caret">›</span> ':''}${esc(r.subject_name)}</td>
+      <td class="num">${esc(r.team||'')}</td>
+      <td class="num">${esc(r.opponent||'')}</td>
+      <td class="score ${scoreClass(r.score)}">${r.score}</td>
+      ${current==='strikeouts'?'':`<td>${badge}</td>`}
+      <td class="num ${thin?'thin':''}">${games!=null?`${games} G`:'—'}</td>
+      ${cells}
+      <td class="why">${esc(r.rationale||'')}</td></tr>${arsRow}`;
+  }).join('');
+
+  $('#empty').classList.toggle('hidden', data.length > 0);
+
+  const more = $('#more');
+  const hidden = all.length - data.length;
+  more.classList.toggle('hidden', hidden <= 0);
+  if (hidden > 0) more.textContent = `Show all ${all.length} — ${hidden} more below`;
+  $('#count').textContent = all.length
+    ? `${data.length} of ${all.length}` : '';
+}
+
+// The workbook is uploaded to storage by each publishing run, under a predictable
+// name. HEAD it rather than linking blindly, so the button disables itself on a slate
+// whose run has not finished instead of handing the client a 404.
+function workbookUrl(){
+  return `${CFG.supabaseUrl}/storage/v1/object/public/picks/props_${slateDate}.xlsx`;
+}
+
+async function checkWorkbook(){
+  const btn = $('#xlsx');
+  if (!slateDate){ btn.disabled = true; return; }
+  try{
+    const r = await fetch(workbookUrl(), {method:'HEAD'});
+    btn.disabled = !r.ok;
+    btn.title = r.ok
+      ? 'The full generated workbook: every category on its own tab'
+      : 'No workbook for this slate yet — it appears once a run finishes';
+  }catch{
+    btn.disabled = true;
+  }
+}
+
+function downloadXlsx(){
+  const a = document.createElement('a');
+  a.href = workbookUrl();
+  a.download = `props_${slateDate}.xlsx`;
+  a.click();
+}
+
+function downloadCsv(){
+  const data = filtered();
+  if (!data.length) return toast('Nothing to export.');
+  const cols = Object.keys(data[0]).filter(c=>c!=='details');
+  const cell = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const csv = [cols.join(','),
+    ...data.map(r=>cols.map(c=>cell(r[c])).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = `propline_${current}_${slateDate}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// The passphrase is kept in this browser only. It never travels anywhere except
+// to our own /api/trigger endpoint.
+async function updateNow(){
+  const btn = $('#update');
+  let secret = localStorage.getItem('propline_secret');
+
+  // Known passphrase -> plain confirmation. Unknown -> ask for it in the same
+  // dialog, so there is never a browser prompt.
+  const answer = await askRun({needSecret: !secret});
+  if (answer === null) return;
+  if (!secret){
+    secret = answer;
+    localStorage.setItem('propline_secret', secret);
+  }
+
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try{
+    const r = await fetch('/api/trigger', {method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Update-Secret': secret || ''},
+      body: JSON.stringify({slate_date: slateDate})});
+    const body = await r.json().catch(()=>({}));
+    if (r.status === 401){
+      // forget it and re-ask immediately, with the reason shown in the dialog
+      localStorage.removeItem('propline_secret');
+      btn.disabled = false; btn.textContent = 'Update Now';
+      const retry = await askRun({needSecret:true, error:'That passphrase was rejected.'});
+      if (retry){ localStorage.setItem('propline_secret', retry); return updateNow(); }
+      return;
+    }
+    if (!r.ok) throw new Error(body.hint || body.error || `HTTP ${r.status}`);
+    toast('Pipeline started. It takes roughly 5–10 minutes; hit Refresh after that.', 8000);
+  }catch(e){
+    toast(`Could not start the run: ${e.message}`, 8000);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Update Now';
+  }
+}
+
+async function refresh(){
+  try{
+    await loadFreshness();
+    await loadProp();
+    await checkWorkbook();
+  }catch(e){ toast(e.message, 8000); }
+}
+
+async function init(){
+  // initNav routes to a view, and showView triggers the reveal pass for it
+  paintChips(); initGlow(); initHeader(); initNav();
+
+  try{
+    CFG = await loadConfig();
+  }catch(e){
+    $('#app').innerHTML =
+      `<div class="empty" style="padding:60px">${esc(e.message)}</div>`;
+    return;
+  }
+
+  $('#tabs').innerHTML = PROPS.map(p=>
+    `<div class="tab${p.key===current?' on':''}" data-k="${p.key}">${p.label}</div>`).join('');
+  $('#tabs').addEventListener('click', e=>{
+    const t = e.target.closest('.tab'); if(!t) return;
+    current = t.dataset.k;
+    showAll = false;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x===t));
+    loadProp().catch(err=>toast(err.message));
+  });
+
+  ['search','teamfilter','statusfilter'].forEach(id=>
+    $('#'+id).addEventListener('input', ()=>{ showAll = false; render(); }));
+  $('#more').addEventListener('click', ()=>{ showAll = true; render(); });
+  // Delegated so it survives every re-render of #tbody.
+  $('#tbody').addEventListener('click', e=>{
+    const row = e.target.closest('tr.ars-toggle');
+    if (!row) return;
+    const panel = $('#tbody').querySelector(`tr[data-ars-for="${row.dataset.ars}"]`);
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    row.classList.toggle('open');
+  });
+  $('#slate').addEventListener('change', e=>{ slateDate = e.target.value; refresh(); });
+  $('#refresh').addEventListener('click', refresh);
+  $('#update').addEventListener('click', updateNow);
+  $('#csv').addEventListener('click', downloadCsv);
+  $('#xlsx').addEventListener('click', downloadXlsx);
+
+  await loadSlates();
+  await refresh();
+}
+
+init();
+</script>
+</body>
+</html>
