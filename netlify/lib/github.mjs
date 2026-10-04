@@ -55,7 +55,7 @@ export function cleanInputs(body = {}) {
   if (typeof body.slate_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.slate_date)) {
     inputs.slate_date = body.slate_date;
   }
-  if (body.window === 'L5' || body.window === 'L10') inputs.window = body.window;
-  if (body.full_pull === true || body.full_pull === 'true') inputs.full_pull = 'true';
+  // slate_date is the only input the NHL workflow declares. GitHub rejects a dispatch
+  // carrying any undeclared input (422), so MLB's window/full_pull are not passed on.
   return inputs;
 }

@@ -4,7 +4,7 @@
 // JavaScript is public, so that token lives here, where only Netlify sees it.
 //
 // Passphrase-gated (UPDATE_SECRET): without it this URL is an open button anyone
-// could hold down, burning the client's Actions minutes and hammering Baseball Savant
+// could hold down, burning the client's Actions minutes and hammering the NHL feed
 // from a machine he owns.
 //
 // The actual dispatch lives in ../lib/github.mjs, shared with the scheduled functions.

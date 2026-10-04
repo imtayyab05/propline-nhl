@@ -7,7 +7,7 @@
 //
 // The endpoint is protected by a shared passphrase (UPDATE_SECRET). Without it, the
 // URL would be an open button anyone could hold down, burning Actions minutes and
-// hammering Baseball Savant from a machine the client owns.
+// hammering the NHL feed from a machine the client owns.
 
 const GITHUB_API = 'https://api.github.com';
 const WORKFLOW = 'daily.yml';
@@ -42,9 +42,6 @@ export default async function handler(req, res) {
   // in the workflow, so it does not get to be free-form.
   if (typeof body.slate_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.slate_date)) {
     inputs.slate_date = body.slate_date;
-  }
-  if (body.window === 'L5' || body.window === 'L10') {
-    inputs.window = body.window;
   }
 
   const r = await fetch(

@@ -205,7 +205,8 @@
   .b-conf{background:rgba(62,207,142,.15);color:var(--good)}
   .b-proj{background:rgba(245,185,66,.15);color:var(--warn)}
   .b-err{background:rgba(255,107,107,.15);color:var(--bad)}
-  .b-scr{background:rgba(255,107,107,.15);color:var(--bad);text-decoration:line-through}
+  /* a lean goalie projection: a real guess, not a scratch, so no strike-through */
+  .b-lean{background:rgba(255,122,89,.15);color:var(--hot)}
 
   button,select,input{font:inherit;color:var(--text);background:var(--panel2);
         border:1px solid var(--line);border-radius:9px;padding:8px 12px;
@@ -270,49 +271,14 @@
   .toast.show{opacity:1;transform:translate(-50%,0)}
   .hidden{display:none}
   .thin{color:var(--warn)}
-  /* Bullpen fatigue reads at a glance: a worked pen is the thing most likely to
-     turn a quiet total into a loud one late. */
-  .pen-rested{color:var(--good)}
-  .pen-average{color:var(--muted)}
-  .pen-overworked{color:var(--bad);font-weight:600}
-  /* Expandable pitch arsenal on the Strikeouts board. */
-  .ars-toggle{cursor:pointer;user-select:none}
-  .ars-toggle .caret{display:inline-block;width:1em;color:var(--muted);
-    transition:transform .18s ease}
-  .ars-toggle.open .caret{transform:rotate(90deg)}
-  .ars-row>td{padding:0 0 14px 0;background:rgba(255,255,255,.02)}
-  /* Grid, not flex. A flex item is sized by its content, so the inner width:100%
-     table resolved against an indefinite width and overflowed into the panel beside
-     it. Grid tracks have definite widths, so the fixed-layout table lands exactly in
-     its track; auto-fit collapses to one column on a narrow screen. */
-  .ars-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
-    gap:26px;padding:12px 18px 4px}
-  /* min-width:0 overrides a grid item's auto minimum, so the table is governed by the
-     track rather than by its own content. */
-  .ars-side{min-width:0}
-  .ars-side h4{margin:0 0 6px;font-size:.72rem;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--muted)}
-  /* table-layout:fixed is required, not cosmetic: an auto-layout table cannot shrink
-     below its content, so inside a 300px flex item it overflows into the panel beside
-     it and the two sides render on top of each other. */
-  .ars-side table{width:100%;border-collapse:collapse;font-size:.8rem;
-    table-layout:fixed;
-    /* Overrides the global `table{min-width:760px}` on line ~239, which exists to make
-       the main board scroll horizontally. Inherited here it pinned each nested table
-       to 760px inside a 494px grid track, so the two sides rendered on top of each
-       other. Measured, not guessed: computed width was 760px against a 494px track. */
-    min-width:0}
-  /* Fixed layout splits columns evenly, which truncated "4-Seam Fastball" at a width
-     that had room for it. Give the name a third and let the four numbers share the
-     rest; the ellipsis stays as the backstop for a genuinely long pitch name. */
-  .ars-side th:first-child,.ars-side td:first-child{width:34%}
-  .ars-side td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ars-side td,.ars-side th{padding:3px 8px 3px 0;text-align:left;
-    border-bottom:1px solid rgba(255,255,255,.05)}
-  .ars-side th{color:var(--muted);font-weight:500}
-  .ars-side .n{text-align:right;font-variant-numeric:tabular-nums}
-  .ars-thin{color:var(--muted)}
-  .ars-note{padding:2px 18px 0;font-size:.72rem;color:var(--muted)}
+  /* Goalie confidence and season-vs-recent pairs on the team tab. */
+  .c-high{color:var(--good)}
+  .c-lean{color:var(--warn)}
+  .c-none{color:var(--bad)}
+  td.l10{color:var(--muted)}
+  th.l10{color:var(--dim)}
+  .up{color:var(--good)} .down{color:var(--bad)}
+  .note{padding:10px 2px 0;color:var(--muted);font-size:13px}
 
   footer{padding:34px 24px;border-top:1px solid var(--line);color:var(--dim);
          font-size:13px;display:flex;gap:14px;flex-wrap:wrap;
@@ -363,11 +329,11 @@
   <div id="chips"></div>
 
   <div class="hero-inner">
-    <p class="eyebrow">MLB Prop Betting · Daily Automation</p>
+    <p class="eyebrow">NHL Prop Betting · Daily Automation</p>
     <h1 class="wordmark">PROP<br>LINE</h1>
     <p class="hero-sub">
-      Every hitter measured against the pitch mix he actually faces today.
-      Ranked before first pitch, not after.
+      Every skater measured on his shot rate, his ice time and the team he faces tonight.
+      Ranked before puck drop, not after.
     </p>
     <button class="cta" data-enter>
       <span>Open Dashboard <i class="arrow">→</i></span>
@@ -387,22 +353,23 @@
     <div class="card reveal" data-d="1" style="--c:#ff6b6b">
       <div class="n">01</div>
       <h3>Pull the whole slate</h3>
-      <p>Every Baseball Savant leaderboard, last-5 and last-10 splits by pitcher
-         hand, confirmed lineups, bullpen availability and park factors —
-         collected automatically, five times a day.</p>
+      <p>Every game log for every skater, goalie and team from the official NHL
+         feed — shots, ice time, power-play time, goals for and against — collected
+         automatically through the day.</p>
     </div>
     <div class="card reveal" data-d="2" style="--c:#f5b942">
       <div class="n">02</div>
-      <h3>Match bat against arsenal</h3>
-      <p>A pitcher throws a specific mix. A hitter has a record against each pitch
-         type. Weighting one by the other shows how he fares against
-         <em>this</em> starter, not against pitching in general.</p>
+      <h3>Rate × minutes × opponent</h3>
+      <p>A skater's output is how often he produces, how long he plays and how
+         generous tonight's opponent is. When a regular is out, his minutes go to
+         the teammates who absorb them.</p>
     </div>
     <div class="card reveal" data-d="3" style="--c:#4ea1ff">
       <div class="n">03</div>
       <h3>Rank, then explain</h3>
-      <p>Hits, total bases, home runs, RBIs, runs, strikeouts and game totals —
-         scored on the numbers, each with a one-line reason you can check.</p>
+      <p>Shots on goal, points, goals, assists, power-play points and total goals —
+         scored on the numbers, with projected goalies and team power rankings
+         alongside.</p>
     </div>
   </div>
 </section>
@@ -412,7 +379,7 @@
 <div class="view" id="app">
 <header id="hdr">
   <div class="row">
-    <div class="brand" data-top>Prop<span>Line</span> MLB</div>
+    <div class="brand" data-top>Prop<span>Line</span> NHL</div>
     <select id="slate" title="Slate date"></select>
     <div class="spacer"></div>
     <div class="meta" id="freshness">loading…</div>
@@ -432,9 +399,8 @@
     <select id="teamfilter"><option value="">All teams</option></select>
     <select id="statusfilter">
       <option value="">Any lineup status</option>
-      <option value="confirmed">Confirmed only</option>
-      <option value="projected">Projected only</option>
-      <option value="scratched">Scratched only</option>
+      <option value="confirmed">Confirmed (final game roster)</option>
+      <option value="projected">Projected</option>
     </select>
     <div class="spacer"></div>
     <button id="xlsx" title="The full generated workbook: every category on its own tab">Download Excel</button>
@@ -458,7 +424,7 @@
 <footer>
   <div>PropLine NHL</div>
   <div class="spacer"></div>
-  <div>Stats from Baseball Savant &amp; the MLB Stats API · rankings are a model, not advice</div>
+  <div>Stats from the official NHL feed · rankings are a model, not advice</div>
 </footer>
 </div>
 
@@ -470,7 +436,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
     <h3 id="mt">Start a pipeline run?</h3>
     <p id="mbody">This re-pulls today's data and rebuilds every board.
-       It takes roughly 5–10 minutes.</p>
+       It takes a few minutes.</p>
     <input id="msecret" type="password" placeholder="Passphrase" class="hidden"
            autocomplete="current-password">
     <div class="err" id="merr"></div>
@@ -487,17 +453,18 @@
 
 <script>
 const PROPS = [
-  {key:'hits',         label:'Hits',        kind:'player'},
-  {key:'total_bases',  label:'Total Bases', kind:'player'},
-  {key:'home_runs',    label:'Home Runs',   kind:'player'},
-  {key:'rbis',         label:'RBIs',        kind:'player'},
-  {key:'runs',         label:'Runs',        kind:'player'},
-  {key:'strikeouts',   label:'Strikeouts',  kind:'player'},
-  {key:'game_total',   label:'Game Totals', kind:'game'},
-  {key:'team_total',   label:'Team Totals', kind:'game'},
+  {key:'sog',          label:'Shots on Goal', kind:'player'},
+  {key:'points',       label:'Points',        kind:'player'},
+  {key:'goals',        label:'Goals',         kind:'player'},
+  {key:'assists',      label:'Assists',       kind:'player'},
+  {key:'ppp',          label:'PP Points',     kind:'player'},
+  {key:'total_goals',  label:'Total Goals',   kind:'game'},
+  {key:'team_stats',   label:'Team Stats',    kind:'teams'},
+  {key:'goalies',      label:'Goalies',       kind:'goalies'},
+  {key:'out',          label:'Out Tonight',   kind:'out'},
 ];
 
-let CFG = null, current = 'total_bases', rows = [], slateDate = null;
+let CFG = null, current = 'sog', rows = [], slateDate = null;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -515,10 +482,10 @@ function toast(msg, ms=4200){
 // Real metrics from this tool, scattered around the hero. Positions are fixed
 // rather than random so nothing ever lands on top of the wordmark.
 const CHIPS = [
-  ['xwOBA .462', 8,  16, '#ff6b6b'], ['BARREL% 15.0', 84, 22, '#4ea1ff'],
-  ['L10 FORM',    5,  40, '#f5b942'], ['HARD-HIT 44%', 88, 46, '#3ecf8e'],
-  ['K/9 11.3',    11, 66, '#7c8cff'], ['PARK 128',     86, 68, '#ff7a59'],
-  ['WHIFF% 37',   16, 84, '#3ecf8e'], ['CONFIRMED',    80, 86, '#f5b942'],
+  ['SOG/60 11.3',  8,  16, '#ff6b6b'], ['PP TOI 4:30',   84, 22, '#4ea1ff'],
+  ['L10 FORM',     5,  40, '#f5b942'], ['SV% .912',      88, 46, '#3ecf8e'],
+  ['PK% 76.4',     11, 66, '#7c8cff'], ['+1.7 TOI',      86, 68, '#ff7a59'],
+  ['POWER #3',     16, 84, '#3ecf8e'], ['PROJECTED G',   80, 86, '#f5b942'],
 ];
 function paintChips(){
   $('#chips').innerHTML = CHIPS.map(([t,x,y,c],i)=>
@@ -644,7 +611,7 @@ function initNav(){
 /* ── confirm / passphrase dialog ────────────────────────────────────────
    The passphrase stays: /api/trigger is a public URL, and without a gate
    anyone who finds it can spend the client's GitHub Actions minutes and
-   hammer Baseball Savant from his account. But it is asked for once, inside
+   hammer the NHL feed from his account. But it is asked for once, inside
    the dialog, instead of through a browser prompt() on every run. */
 
 function askRun({needSecret, error}){
@@ -654,7 +621,7 @@ function askRun({needSecret, error}){
     input.value = '';
     $('#mbody').textContent = needSecret
       ? 'Enter the passphrase to start a run. It is remembered on this device, so you will only be asked once.'
-      : "This re-pulls today's data and rebuilds every board. It takes roughly 5–10 minutes.";
+      : "This re-pulls today's data and rebuilds every board. It takes a few minutes.";
     err.textContent = error || '';
     err.classList.toggle('show', !!error);
 
@@ -734,32 +701,51 @@ async function loadFreshness(){
     `updated <strong>${ago}</strong> · ${esc(runLabel(last.run_type))}` +
     (failed ? ' <span class="badge b-err">last run failed</span>' : '');
 
-  const counts = await sb('lineups',
-    {select:'status', game_date:`eq.${slateDate}`}).catch(()=>[]);
-  const conf = counts.filter(r=>r.status==='confirmed').length;
-  const proj = counts.filter(r=>r.status==='projected').length;
-  const scr  = counts.filter(r=>r.status==='scratched').length;
-  const games = await sb('games', {select:'game_pk', game_date:`eq.${slateDate}`})
+  // Goalies are the thing still moving on game day, so the header says how many are
+  // settled. Confirmed only exists once a game is under way (see goalies.py).
+  const gs = await sb('goalie_starts',
+    {select:'status,confidence', game_date:`eq.${slateDate}`}).catch(()=>[]);
+  const conf = gs.filter(r=>r.status==='confirmed').length;
+  const high = gs.filter(r=>r.status!=='confirmed' && r.confidence==='high').length;
+  const lean = gs.filter(r=>r.status!=='confirmed' && r.confidence!=='high').length;
+  const games = await sb('games', {select:'game_id', game_date:`eq.${slateDate}`})
                       .catch(()=>[]);
+  const outs = await sb('player_status', {select:'player_id', game_date:`eq.${slateDate}`})
+                     .catch(()=>[]);
   $('#slateinfo').innerHTML =
-    `${games.length} games · ` +
+    `${games.length} games · goalies: ` +
     (conf ? `<span class="badge b-conf">${conf} confirmed</span> ` : '') +
-    (proj ? `<span class="badge b-proj">${proj} projected</span>` : '') +
-    (scr ? ` <span class="badge b-scr">${scr} scratched</span>` : '') +
-    (proj && !conf ? ' — confirmed lineups post 2–4h before first pitch' : '');
+    (high ? `<span class="badge b-proj">${high} projected</span> ` : '') +
+    (lean ? `<span class="badge b-lean">${lean} lean</span>` : '') +
+    (outs.length ? ` · ${outs.length} regulars out` : '');
 }
+
+// Each tab reads its own table. Player and game boards share prop_picks/game_picks
+// with MLB's layout; the three reference tabs are plain per-slate tables.
+const SOURCES = {
+  player:  () => ['prop_picks', {prop:`eq.${current}`, order:'rank.asc'}],
+  game:    () => ['game_picks', {prop:`eq.${current}`, order:'rank.asc'}],
+  teams:   () => ['team_stats', {order:'power_rank.asc'}],
+  goalies: () => ['goalie_starts', {order:'team.asc'}, 'game_date'],
+  out:     () => ['player_status', {order:'base_toi.desc'}, 'game_date'],
+};
 
 async function loadProp(){
   const prop = PROPS.find(p=>p.key===current);
-  const table = prop.kind === 'player' ? 'prop_picks' : 'game_picks';
-  rows = await sb(table, {select:'*', slate_date:`eq.${slateDate}`,
-                          prop:`eq.${current}`, order:'rank.asc'});
+  const [table, extra, dateCol='slate_date'] = SOURCES[prop.kind]();
+  rows = await sb(table, {select:'*', [dateCol]:`eq.${slateDate}`, ...extra});
+  // the lineup filter only means something on player boards
+  $('#statusfilter').classList.toggle('hidden', prop.kind !== 'player');
   buildTeamFilter();
   render();
 }
 
+// A game row belongs to both of its teams.
+const rowTeams = r => r.team ? [r.team]
+  : [r.details?.home_team, r.details?.away_team].filter(Boolean);
+
 function buildTeamFilter(){
-  const teams = [...new Set(rows.map(r=>r.team).filter(Boolean))].sort();
+  const teams = [...new Set(rows.flatMap(rowTeams))].sort();
   const sel = $('#teamfilter'), keep = sel.value;
   sel.innerHTML = '<option value="">All teams</option>' +
     teams.map(t=>`<option>${esc(t)}</option>`).join('');
@@ -770,12 +756,14 @@ function filtered(){
   const q = $('#search').value.trim().toLowerCase();
   const team = $('#teamfilter').value;
   const status = $('#statusfilter').value;
+  const isPlayer = PROPS.find(p=>p.key===current).kind === 'player';
   return rows.filter(r=>{
-    const hay = [r.subject_name, r.subject, r.team, r.opponent, r.venue]
+    const hay = [r.subject_name, r.subject, r.team, r.team_name, r.opponent,
+                 r.player_name, r.goalie_name, r.backup_name]
                   .filter(Boolean).join(' ').toLowerCase();
     if (q && !hay.includes(q)) return false;
-    if (team && r.team !== team) return false;
-    if (status && (r.lineup_status||'') !== status) return false;
+    if (team && !rowTeams(r).includes(team)) return false;
+    if (isPlayer && status && (r.lineup_status||'') !== status) return false;
     return true;
   });
 }
@@ -789,16 +777,15 @@ const scoreClass = s => s >= 80 ? 's-hi' : s >= 60 ? 's-mid' : 's-lo';
 const PAGE_ROWS = 60;
 let showAll = false;
 
-// Per-prop columns, mirroring propline/output.py. In v2 the props are scored on
-// genuinely different inputs — total bases takes the better of two paths, home runs
-// weigh a matchup matrix and a barrel cap, strikeouts are about the lineup faced — so
-// a single shared column set would hide the numbers that actually drive each board.
-//
-// `get` reads from the pick row first, then its details blob. `fmt` is optional.
 const pct1 = v => v == null ? '' : `${(+v).toFixed(1)}%`;
-const num3 = v => v == null ? '' : (+v).toFixed(3);
+const pctF = v => v == null ? '' : `${(100 * v).toFixed(1)}%`;   // 0.764 -> 76.4%
+const num1 = v => v == null ? '' : (+v).toFixed(1);
+const num2 = v => v == null ? '' : (+v).toFixed(2);
+const sv3 = v => v == null ? '' : (+v).toFixed(3).replace(/^0/, '');  // .912
+const mins = v => { if (v == null) return ''; const s = Math.round(v * 60);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2,'0')}`; };
+const plus = v => v == null || +v === 0 ? '' : `+${(+v).toFixed(1)}`;
 const yesNo = v => v === true ? 'yes' : v === false ? '' : (v ?? '');
-const tempF = v => v == null ? '' : `${Math.round(+v)}°F`;
 
 // The pipeline records which slot produced a run. Show it in words — the raw
 // values (scheduled_morning, ...) are for the database, not the header.
@@ -806,77 +793,80 @@ const RUN_LABELS = {
   scheduled_morning:   'morning run',
   scheduled_midday:    'midday run',
   scheduled_afternoon: 'afternoon run',
-  scheduled_evening:   'evening run',
+  scheduled_pregame:   'pre-game run',
   scheduled_late:      'late run',
   manual:              'manual run',
 };
 const runLabel = k => RUN_LABELS[k] || k || 'run';
 
+// Per-prop columns, mirroring propline/output.py. `get` reads from the pick row
+// first, then its details blob.
 const EXTRA_COLS = {
-  // Totals boards. v2 adds the bullpen-fatigue and weather signals the client asked
-  // for, so a worked pen or a pitching duel is visible without opening the workbook.
-  game_total: [
-    ['Home Pen', 'pen_status_home'],
-    ['Away Pen', 'pen_status_away'],
-    ['Starters WHIP / K9', 'starter_whip_k9'],
-    ['Temp', 'temp_f', tempF],
-    ['Wind', 'wind'],
+  sog: [
+    ['SOG/G L10', 'sog_pg_recent', num1],
+    ['SOG/60', 'shots60', num1],
+    ['Opp SOG Allowed (pos)', 'opp_sa_pos', num1],
   ],
-  team_total: [
-    ['Opp Pen', 'opp_pen_status'],
-    ['Opp SP WHIP / K9', 'starter_whip_k9'],
-    ['Temp', 'temp_f', tempF],
-    ['Wind', 'wind'],
+  goals: [
+    ['Goals L10', 'goals_recent'],
+    ['Goals/60', 'goals60', num2],
+    ['Sh% (adj)', 'sh_pct', pctF],
+    ['SOG/G L10', 'sog_pg_recent', num1],
+    ['PP TOI', 'pp_toi_recent', mins],
+    ['Opp Goalie', 'opp_goalie'],
+    ['SV%', 'opp_goalie_sv', sv3],
   ],
-  hits: [
-    ['Recent xwOBA', 'recent_xwoba', num3],
-    ['Contact% (14d)', 'contact_rate_recent', pct1],
-    ['Line Drive%', 'line_drive_rate', pct1],
-    ['Ground Ball%', 'ground_ball_rate', pct1],
-    ['GB Penalty', 'gb_penalty'],
-    ['SP WHIP', 'starter_whip', num3],
-    ['SP Whiff', 'starter_whiff_matchup'],
+  assists: [
+    ['Assists L10', 'assists_recent'],
+    ['Ast/60', 'assists60', num2],
+    ['PP TOI', 'pp_toi_recent', mins],
+    ['Team GF/G', 'team_gf', num2],
+    ['Opp GA/G', 'opp_ga', num2],
   ],
-  total_bases: [
-    ['Path', 'tb_path'],
-    ['Power', 'tb_power_score'],
-    ['Volume', 'tb_volume_score'],
-    ['Strict 2+', 'tb_strict', yesNo],
-    ['ISO (14d)', 'iso_recent_14day', num3],
-    ['Barrel%', 'recent_barrel_pct', pct1],
-    ['Matchup', 'pitch_matchup_grade'],
+  points: [
+    ['Pts/G L10', 'points_pg_recent', num2],
+    ['Pts/60', 'points60', num2],
+    ['PP TOI', 'pp_toi_recent', mins],
+    ['Opp GA/G', 'opp_ga', num2],
+    ['Opp Goalie', 'opp_goalie'],
+    ['SV%', 'opp_goalie_sv', sv3],
   ],
-  home_runs: [
-    ['Arsenal RV', 'hr_matchup_rv', num3],
-    ['Barrel%', 'recent_barrel_pct', pct1],
-    ['Fly Ball%', 'fly_ball_rate', pct1],
-    ['ISO (14d)', 'iso_recent_14day', num3],
-    ['Suppression', 'pitcher_barrel_suppression_flag'],
-    ['Capped', 'hr_suppression_capped', yesNo],
-    ['Matchup', 'pitch_matchup_grade'],
+  ppp: [
+    ['PPP L10', 'ppp_recent'],
+    ['PPP/G', 'ppp_pg', num2],
+    ['PP TOI', 'pp_toi_recent', mins],
+    ['+PP TOI', 'pp_toi_bump', plus],
+    ['Opp Times SH/G', 'opp_pen_taken', num2],
+    ['Opp PK%', 'opp_pk_pct', pctF],
   ],
-  rbis: [
-    ['Table-Setter OBP', 'table_setter_obp', num3],
-    ['Lineup Ctx', 'context_mult'],
-    ['vs Arsenal xSLG', 'matchup_est_slg', num3],
-    ['Matchup', 'pitch_matchup_grade'],
-  ],
-  runs: [
-    ['Top-Order OBP', 'top_order_obp', num3],
-    ['Table-Setter OBP', 'table_setter_obp', num3],
-    ['Lineup Ctx', 'context_mult'],
-    ['Matchup', 'pitch_matchup_grade'],
-  ],
-  strikeouts: [
-    ['Split K', 'split_k_rate_matchup'],
-    ['Whiff% (14d)', 'whiff_14day', pct1],
-    ['Opp Lineup K%', 'opp_lineup_k_pct', pct1],
-    ['WHIP', 'pitcher_whip', num3],
-    ['Vegas K', 'vegas_k_line'],
-    ['Exp. Pitches', 'expected_pitch_limit'],
-    ['Leash', 'leash_penalty'],
+  total_goals: [
+    ['Away GF/G', 'away_gf_pg', num2],
+    ['Away GA/G', 'away_ga_pg', num2],
+    ['Home GF/G', 'home_gf_pg', num2],
+    ['Home GA/G', 'home_ga_pg', num2],
+    ['Away Goalie', 'away_goalie'],
+    ['SV%', 'away_goalie_sv', sv3],
+    ['Home Goalie', 'home_goalie'],
+    ['SV%', 'home_goalie_sv', sv3],
+    ['Regulars Out', 'missing_names'],
   ],
 };
+// Shown on every player board after the prop columns: the add-on, made visible.
+const PLAYER_TAIL = [
+  ['TOI L10', 'toi_recent', mins],
+  ['+TOI', 'toi_bump', plus],
+  ['Minutes From', 'bump_from'],
+  ['Opp Missing', 'opp_missing'],
+];
+
+// Team tab: season number with its last-10 partner right beside it.
+const TEAM_PAIRS = [
+  ['GF/G', 'gf_pg', num2], ['GA/G', 'ga_pg', num2],
+  ['SOG/G', 'sf_pg', num1], ['SOG Agst/G', 'sa_pg', num1],
+  ['PPG/G', 'ppg_pg', num2], ['PPG Agst/G', 'ppga_pg', num2],
+  ['PP%', 'pp_pct', pctF], ['PK%', 'pk_pct', pctF],
+  ['Times SH/G', 'pen_taken_pg', num2],
+];
 
 function cellValue(row, key, fmt){
   const d = row.details || {};
@@ -885,96 +875,103 @@ function cellValue(row, key, fmt){
   return fmt ? fmt(v) : v;
 }
 
-// The starter's top 3 pitches to each side, shipped inside the pick's details JSON
-// rather than a table of its own. Rates come from the ~3-week raw window, so a thin
-// sample is shown greyed with a dash instead of a number it cannot support.
-function arsenalPanel(arsenal, cols){
-  const side = label => {
-    const rows = arsenal.filter(a => a.side === label);
-    if (!rows.length) return '';
-    return `<div class="ars-side"><h4>${esc(label)}</h4><table>
-      <tr><th>Pitch</th><th class="n">Usage</th><th class="n">Velo</th>
-          <th class="n">Whiff</th><th class="n">xwOBA</th></tr>
-      ${rows.map(a=>`<tr class="${a.ok?'':'ars-thin'}">
-        <td>${esc(a.pitch||'')}</td>
-        <td class="n">${a.usage!=null?a.usage.toFixed(1)+'%':'—'}</td>
-        <td class="n">${a.velo!=null?a.velo.toFixed(1):'—'}</td>
-        <td class="n">${a.ok&&a.whiff!=null?a.whiff.toFixed(1)+'%':'—'}</td>
-        <td class="n">${a.ok&&a.xwoba!=null?a.xwoba.toFixed(3):'—'}</td></tr>`).join('')}
-    </table></div>`;
-  };
-  const thin = arsenal.some(a=>!a.ok);
-  return `<td colspan="${cols}"><div class="ars-wrap">${side('vs LHB')}${side('vs RHB')}</div>
-    ${thin?'<div class="ars-note">Dashes: too few pitches in the recent window to quote a rate.</div>':''}</td>`;
+const confBadge = c => c ? `<span class="c-${esc(c)}">${esc(c)}</span>` : '';
+
+function head(cols){ return `<tr>${cols.map(c=>typeof c === 'string'
+  ? `<th>${esc(c)}</th>` : `<th class="${c[1]}">${esc(c[0])}</th>`).join('')}</tr>`; }
+
+function renderTeams(data){
+  $('#thead').innerHTML = head(['Power #','Team','Power Score','GP','Record','Pts%',
+    ...TEAM_PAIRS.flatMap(([l])=>[l, [l+' L10','l10']]), 'L10 Record']);
+  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
+    <td class="rank">${r.power_rank}</td>
+    <td class="name">${esc(r.team)} <span class="thin" style="color:var(--dim)">${esc(r.team_name||'')}</span></td>
+    <td class="score ${scoreClass(r.power_score)}">${r.power_score}</td>
+    <td class="num">${r.gp ?? 0}</td>
+    <td class="num">${esc(r.record||'—')}</td>
+    <td class="num">${r.points_pct!=null?pctF(r.points_pct):''}</td>
+    ${TEAM_PAIRS.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>
+      <td class="num l10">${esc(cellValue(r,'l10_'+k,f))}</td>`).join('')}
+    <td class="num l10">${esc(r.l10_record||'')}</td></tr>`).join('');
 }
+
+function renderGoalies(data){
+  $('#thead').innerHTML = head(['Team','Goalie','Status','Confidence','Why',
+                                'SV% (adj)','Back-to-Back','Other Goalie']);
+  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
+    <td class="num">${esc(r.team)}</td>
+    <td class="name">${esc(r.goalie_name||'—')}</td>
+    <td>${r.status==='confirmed' ? '<span class="badge b-conf">confirmed</span>'
+                                 : '<span class="badge b-proj">projected</span>'}</td>
+    <td>${confBadge(r.confidence)}</td>
+    <td class="why">${esc(r.reason||'')}</td>
+    <td class="num">${sv3(r.sv_pct)}</td>
+    <td class="num">${r.back_to_back ? 'yes' : ''}</td>
+    <td class="num">${esc(r.backup_name||'')}</td></tr>`).join('');
+}
+
+function renderOut(data){
+  $('#thead').innerHTML = head(['Team','Player','Pos','Usual TOI','Games Missed','Why','Source']);
+  const src = {game_roster:'tonight\'s game roster', recent_games:'recent games', none:''};
+  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
+    <td class="num">${esc(r.team)}</td>
+    <td class="name">${esc(r.player_name)}</td>
+    <td class="num">${esc(r.position||'')}</td>
+    <td class="num">${mins(r.base_toi)}</td>
+    <td class="num">${r.games_missed ?? ''}</td>
+    <td class="why">${esc(r.reason||'')}</td>
+    <td class="num">${esc(src[r.status_source] ?? r.status_source ?? '')}</td></tr>`).join('');
+}
+
+function renderGame(data){
+  const extra = EXTRA_COLS[current] || [];
+  $('#thead').innerHTML = head(['#','Matchup','Score','Goalies (away / home)',
+                                ...extra.map(c=>c[0]), 'Why']);
+  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
+    <td class="rank">${r.rank}</td>
+    <td class="name">${esc(r.subject)}</td>
+    <td class="score ${scoreClass(r.score)}">${r.score}</td>
+    <td class="num">${esc(r.goalies_status||'')}</td>
+    ${extra.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>`).join('')}
+    <td class="why">${esc(r.rationale||'')}</td></tr>`).join('');
+}
+
+function renderPlayer(data){
+  const extra = [...(EXTRA_COLS[current] || []), ...PLAYER_TAIL];
+  $('#thead').innerHTML = head(['#','Player','Pos','Team','Opp','Score','Lineup','Recent',
+                                ...extra.map(c=>c[0]), 'Why']);
+  return data.map((r,i)=>{
+    const d = r.details || {};
+    const games = d.recent_games;
+    const thin = games != null && games < 7;
+    const badge = r.lineup_status === 'confirmed'
+      ? '<span class="badge b-conf">confirmed</span>'
+      : '<span class="badge b-proj">projected</span>';
+    return `<tr style="--i:${Math.min(i,26)}">
+      <td class="rank">${r.rank}</td>
+      <td class="name">${esc(r.subject_name)}</td>
+      <td class="num">${esc(d.position||'')}</td>
+      <td class="num">${esc(r.team||'')}</td>
+      <td class="num">${esc(r.opponent||'')}</td>
+      <td class="score ${scoreClass(r.score)}">${r.score}</td>
+      <td>${badge}</td>
+      <td class="num ${thin?'thin':''}">${games!=null?`${games} G`:'—'}</td>
+      ${extra.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>`).join('')}
+      <td class="why">${esc(r.rationale||'')}</td></tr>`;
+  }).join('');
+}
+
+const RENDERERS = {player:renderPlayer, game:renderGame, teams:renderTeams,
+                   goalies:renderGoalies, out:renderOut};
 
 function render(){
   const prop = PROPS.find(p=>p.key===current);
   const all = filtered();
   const data = showAll ? all : all.slice(0, PAGE_ROWS);
-  const isPlayer = prop.kind === 'player';
-  const extra = EXTRA_COLS[current] || [];
+  $('#tbody').innerHTML = RENDERERS[prop.kind](data);
 
-  $('#thead').innerHTML = isPlayer
-    ? `<tr><th>#</th><th>${current==='strikeouts'?'Pitcher':'Player'}</th><th>Team</th>
-       <th>${current==='strikeouts'?'Opponent':'Opposing SP'}</th><th>Score</th>
-       ${current==='strikeouts'?'':'<th>Lineup</th>'}<th>Recent</th>
-       ${extra.map(c=>`<th>${esc(c[0])}</th>`).join('')}<th>Why</th></tr>`
-    : `<tr><th>#</th><th>Matchup</th><th>Venue</th><th>Score</th>
-       <th>Vegas</th><th>vs Vegas</th><th>Park Runs</th>
-       ${extra.map(c=>`<th>${esc(c[0])}</th>`).join('')}<th>Why</th></tr>`;
-
-  $('#tbody').innerHTML = data.map((r,i)=>{
-    const d = r.details || {};
-    // cap the stagger so a 200-row board still finishes animating promptly
-    const st = `style="--i:${Math.min(i,26)}"`;
-    if (!isPlayer){
-      const pf = r.park_runs ?? '—';
-      const flag = r.park_matched === false ? ' <span class="thin">(no park data)</span>' : '';
-      return `<tr ${st}>
-        <td class="rank">${r.rank}</td>
-        <td class="name">${esc(r.subject)}</td>
-        <td class="num">${esc(r.venue||'')}</td>
-        <td class="score ${scoreClass(r.score)}">${r.score}</td>
-        <td class="num">${esc(cellValue(r,'vegas_total'))}</td>
-        <td class="num">${esc(cellValue(r,'vs_vegas'))}</td>
-        <td class="num">${pf}${flag}</td>
-        ${extra.map(([, key, fmt]) => {
-          const val = cellValue(r, key, fmt);
-          const tint = key.includes('pen_status') ? ` pen-${String(val).toLowerCase()}` : '';
-          return `<td class="num${tint}">${esc(val)}</td>`;
-        }).join('')}
-        <td class="why">${esc(r.rationale||'')}</td></tr>`;
-    }
-    const games = d.recent_games;
-    const thin = games != null && games < 7;
-    const badge = r.lineup_status === 'confirmed'
-      ? '<span class="badge b-conf">confirmed</span>'
-      : r.lineup_status === 'projected'
-        ? '<span class="badge b-proj">projected</span>'
-      : r.lineup_status === 'scratched'
-        ? '<span class="badge b-scr">scratched</span>' : '';
-    const cells = extra.map(([, key, fmt]) =>
-      `<td class="num">${esc(cellValue(r, key, fmt))}</td>`).join('');
-    const ars = current==='strikeouts' && Array.isArray(d.arsenal) && d.arsenal.length
-      ? d.arsenal : null;
-    // strikeouts has no Lineup column, hence 7 fixed columns rather than 8
-    const colCount = 7 + extra.length;
-    const arsRow = ars
-      ? `<tr class="ars-row hidden" data-ars-for="${i}">${arsenalPanel(ars, colCount)}</tr>`
-      : '';
-    return `<tr ${st}${ars?` class="ars-toggle" data-ars="${i}"`:''}>
-      <td class="rank">${r.rank}</td>
-      <td class="name">${ars?'<span class="caret">›</span> ':''}${esc(r.subject_name)}</td>
-      <td class="num">${esc(r.team||'')}</td>
-      <td class="num">${esc(r.opponent||'')}</td>
-      <td class="score ${scoreClass(r.score)}">${r.score}</td>
-      ${current==='strikeouts'?'':`<td>${badge}</td>`}
-      <td class="num ${thin?'thin':''}">${games!=null?`${games} G`:'—'}</td>
-      ${cells}
-      <td class="why">${esc(r.rationale||'')}</td></tr>${arsRow}`;
-  }).join('');
-
+  $('#empty').textContent = prop.kind === 'out'
+    ? 'No regulars are out for this slate.' : 'Nothing to show for this slate yet.';
   $('#empty').classList.toggle('hidden', data.length > 0);
 
   const more = $('#more');
@@ -1056,7 +1053,7 @@ async function updateNow(){
       return;
     }
     if (!r.ok) throw new Error(body.hint || body.error || `HTTP ${r.status}`);
-    toast('Pipeline started. It takes roughly 5–10 minutes; hit Refresh after that.', 8000);
+    toast('Pipeline started. It takes a few minutes; hit Refresh after that.', 8000);
   }catch(e){
     toast(`Could not start the run: ${e.message}`, 8000);
   }finally{
@@ -1097,15 +1094,6 @@ async function init(){
   ['search','teamfilter','statusfilter'].forEach(id=>
     $('#'+id).addEventListener('input', ()=>{ showAll = false; render(); }));
   $('#more').addEventListener('click', ()=>{ showAll = true; render(); });
-  // Delegated so it survives every re-render of #tbody.
-  $('#tbody').addEventListener('click', e=>{
-    const row = e.target.closest('tr.ars-toggle');
-    if (!row) return;
-    const panel = $('#tbody').querySelector(`tr[data-ars-for="${row.dataset.ars}"]`);
-    if (!panel) return;
-    panel.classList.toggle('hidden');
-    row.classList.toggle('open');
-  });
   $('#slate').addEventListener('change', e=>{ slateDate = e.target.value; refresh(); });
   $('#refresh').addEventListener('click', refresh);
   $('#update').addEventListener('click', updateNow);

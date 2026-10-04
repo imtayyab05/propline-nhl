@@ -47,100 +47,79 @@ TIMEOUT = 120
 # and fails in production. Re-measure with real data if the model ever changes.
 MAX_PER_CALL = 12
 
-FIELD_GLOSSARY = """Field meanings:
-- matchup_est_woba / matchup_est_slg: the hitter's expected production against THIS
-  starter's specific pitch mix (xwOBA ~.320 is average, .400+ is excellent)
-- recent_barrel_pct: share of batted balls hit at ideal speed+angle over the last 10
-  games (league average ~8%)
-- recent_hard_hit: share of batted balls at 95+ mph
-- best_pitch / best_pitch_for_batter: the pitch in this starter's arsenal the hitter
-  handles best
-- primary_pitch: what the starter throws most often
-- recent_k_per_game / recent_k_pct / recent_whiff_pct: the pitcher's recent strikeout form
-- opp_lineup_k_pct: how often the opposing lineup strikes out
-- park_runs: park run factor, 100 = neutral, higher favours hitters
-- recent_games: how many games the recent numbers cover (fewer = less reliable)
-
-Team and game total fields are INTERNAL INDEXES on arbitrary scales. Never quote their
-raw values — they mean nothing to a reader. Describe what they imply instead:
-- combined_offense / lineup_matchup_woba: how well the lineup(s) project against the
-  starting pitching they face. Say "both lineups project well against tonight's
-  starters", not "combined offense of 0.674".
-- combined_bullpen_tired / opp_bullpen_tired: 0 = fully rested pen, 1 = most arms
-  worked recently. Say "the pen is short-handed" or "the pen is rested".
-- opp_starter_weak: how much the opposing starter gives up. Say "a starter who has
-  been hittable", not the number.
-park_runs and named pitchers ARE real and may be quoted directly."""
+FIELD_GLOSSARY = """Field meanings (all numbers are real and may be quoted):
+- prop: which bet the pick is for - sog (shots on goal), points, goals, assists,
+  ppp (power-play points)
+- opponent: the team he plays tonight
+- sog_pg_recent: shots on goal per game over his last 10 games
+- shots60 / goals60 / assists60 / points60: per 60 minutes of ice time, this season
+  blended with last season
+- goals_recent / assists_recent / ppp_recent: totals over his last 10 games
+- points_pg_recent: points per game over his last 10 games
+- ppp_pg: power-play points per game, season
+- sh_pct: his shooting percentage, already a percent (12.5 means 12.5%)
+- toi_recent: minutes per game over his last 10; pp_toi_recent: power-play minutes
+  per game over his last 10
+- toi_bump / pp_toi_bump: EXTRA minutes he is expected to pick up tonight because a
+  teammate is out; bump_from names that teammate
+- opp_sa_pos: shots on goal the opponent allows per game to players at his position
+  (forwards or defensemen)
+- opp_ga: goals the opponent allows per game; team_gf: goals his own team scores per game
+- opp_goalie / opp_goalie_sv: the goalie expected in net for the opponent and his save
+  percentage (.900 is about average; lower is weaker)
+- opp_goalie_status: "projected/high", "projected/lean" or "confirmed/confirmed". If it
+  starts with "projected", call him the PROJECTED or likely starter, never "starting"
+- opp_pen_taken: times per game the opponent goes shorthanded (gives power plays)
+- opp_pk_pct: the opponent's penalty-kill percent, already a percent
+- recent_games: how many games the recent numbers cover (fewer = less reliable)"""
 
 SYSTEM = (
-    "You write one-sentence explanations for baseball prop shortlists.\n"
+    "You write one-sentence explanations for hockey player prop shortlists.\n"
     "The picks were ALREADY ranked by a statistical model. Never re-rank them, never "
     "contradict the numbers, never invent a statistic that is not in the input.\n\n"
     + FIELD_GLOSSARY +
     "\n\nRules:\n"
     "- ONE complete sentence per pick, 12-22 words.\n"
-    "- Name the player, then cite two concrete numbers as evidence.\n"
+    "- Name the player, then cite two concrete numbers relevant to THAT prop as evidence.\n"
+    "- If toi_bump or pp_toi_bump is present, mention the extra minutes and whose they are.\n"
     "- Never output a bare field name or a raw key:value pair.\n"
-    "- Plain language. No hype, no betting advice, no guarantees, no 'lock' or 'smash'.\n"
-    "- If a pick has few recent games, say the sample is small.\n\n"
-    # NB: deliberately a made-up player. Using a real one risks the model echoing the
-    # example verbatim when a genuine pick happens to match it, which would hide a
-    # failure to actually read the data.
-    "Example input:  {\"id\": 0, \"player_name\": \"Sample Hitter\", \"opp_starter\": "
-    "\"Sample Pitcher\", \"matchup_est_woba\": 0.377, \"recent_barrel_pct\": 9.4, "
-    "\"best_pitch\": \"Slider\"}\n"
-    "Example output: {\"id\": 0, \"text\": \"Sample Hitter projects at a .377 xwOBA "
-    "versus Sample Pitcher's mix and is barrelling 9.4% of batted balls.\"}\n\n"
+    "- Plain language. No hype, no betting advice, no guarantees, no 'lock' or 'smash'.\n\n"
+    # NB: deliberately a made-up player, so a real pick can never be answered by
+    # echoing the example.
+    "Example input:  {\"id\": 0, \"prop\": \"sog\", \"player_name\": \"Sample Skater\", "
+    "\"opponent\": \"ABC\", \"sog_pg_recent\": 3.6, \"opp_sa_pos\": 21.4}\n"
+    "Example output: {\"id\": 0, \"text\": \"Sample Skater is averaging 3.6 shots a "
+    "game over his last ten, and ABC allow 21.4 shots a night to forwards.\"}\n\n"
     "Return strict JSON: {\"rationales\": [{\"id\": <id>, \"text\": \"...\"}]}\n\n"
-    # Smaller models paraphrase these rates into the wrong denominator, which turns a
-    # correct number into a false statement. Naming the exact mistakes fixes it; the
-    # general glossary above on its own did not.
-    "STRICT WORDING — these are the mistakes models actually make here:\n"
-    "- barrel and hard-hit rates are a share of BATTED BALLS. Never write 'of his "
-    "swings', 'of his hits', 'of his at-bats' or 'of his plate appearances'.\n"
-    "- xwOBA is a rate, not a count. Never write 'hits .400 xwOBA'; write 'projects at "
-    "a .400 xwOBA'.\n"
+    "STRICT WORDING:\n"
+    "- Per-60 rates are per 60 minutes of ICE TIME, not per game. Never write 'per game' "
+    "for shots60, goals60, assists60 or points60.\n"
+    "- A projected goalie is not confirmed. Never write that he 'starts' or 'is in net'.\n"
     "- If recent_games is below 7, you MUST say the sample is small."
 )
 
 
-# Game and team totals have no player, no opposing starter and no rate stats — but the
-# player prompt above demands all three. Asked to explain a game total with it, the
-# model replied "No player data available for this pick.", then began returning empty
-# completions, which Groq surfaces as `json_validate_failed`. That reads like a JSON
-# bug and is really a prompt that does not match the rows being sent.
+# Game totals have no player - the player prompt above would make the model complain
+# about missing data and then return empty completions (MLB lesson).
 TOTALS_SYSTEM = (
-    "You write one-sentence explanations for baseball GAME TOTAL and TEAM TOTAL picks.\n"
-    "These are about run scoring across a whole game, not about an individual player. "
-    "There is deliberately no player in the input - never ask for one, and never say "
-    "data is missing.\n\n"
-    "Field meanings:\n"
-    "- teams / team: the matchup, or the team the pick is on\n"
-    "- venue: the ballpark\n"
-    "- park_runs: park run factor, 100 = neutral, higher favours scoring\n"
-    "- combined_offense_desc / lineup_matchup_woba_desc: how the lineup(s) project "
-    "against the starting pitching they face (quiet / average / strong)\n"
-    "- pen_status_home / pen_status_away / opp_pen_status: bullpen condition from the "
-    "last three days of relief work. Exactly one of Rested, Average, Overworked. "
-    "'Overworked' means that bullpen is heavily used and vulnerable late\n"
-    "- opp_starter_weak_desc: how hittable the opposing starter has been "
-    "(tough / average / hittable)\n"
-    "- combined_starter_k9_desc: the starters' strikeout profile "
-    "(contact-friendly / average / strikeout-heavy). 'strikeout-heavy' points to a "
-    "pitching duel that suppresses runs\n"
-    "- temp_f: temperature at first pitch in Fahrenheit; warm air helps the ball carry. "
-    "Absent for indoor parks\n"
-    "- wind: wind at first pitch, already written out (e.g. '12 mph from SW'). Quote it "
-    "as given and NEVER claim it blows in or out - that depends on which way the park "
-    "faces, which is not in the data\n\n"
+    "You write one-sentence explanations for hockey TOTAL GOALS picks - combined goals "
+    "by both teams in one game. There is deliberately no player in the input - never ask "
+    "for one, and never say data is missing.\n\n"
+    "Field meanings (real numbers, may be quoted):\n"
+    "- matchup: away team @ home team\n"
+    "- home_gf_pg / away_gf_pg: goals that team scores per game\n"
+    "- home_ga_pg / away_ga_pg: goals that team allows per game\n"
+    "- home_goalie / away_goalie with home_goalie_sv / away_goalie_sv: the goalie expected "
+    "in net for that team and his save percentage (.900 is about average)\n"
+    "- goalies_status: 'projected' or 'confirmed' for away / home. A projected goalie is "
+    "the LIKELY starter - never write that he starts\n"
+    "- missing_names: regulars out tonight, if any\n\n"
     "Rules:\n"
     "- ONE complete sentence per pick, 12-22 words.\n"
-    "- Name the teams or the team, then give two reasons from the fields provided.\n"
-    "- The _desc fields are already plain English. Use those words; never invent "
-    "numbers for them. park_runs is a real number and may be quoted.\n"
+    "- Name the teams, then give two reasons from the fields provided.\n"
     "- Plain language. No hype, no betting advice, no guarantees.\n\n"
-    "Example output: {\"id\": 0, \"text\": \"Both lineups project strongly at Truist "
-    "Park and the Atlanta bullpen is overworked after three heavy days.\"}\n\n"
+    "Example output: {\"id\": 0, \"text\": \"Both ABC and XYZ allow over 3.4 goals a "
+    "game, and XYZ's projected goalie carries an .887 save percentage.\"}\n\n"
     "Return strict JSON: {\"rationales\": [{\"id\": <id>, \"text\": \"...\"}]}"
 )
 
@@ -231,6 +210,13 @@ def _call(rows: list[dict], api_key: str, system: str = None) -> dict[int, str]:
     raise RuntimeError("groq: rate limited after retries")
 
 
+def _own(got: dict[int, str], sent: list[dict]) -> dict[int, str]:
+    """Keep only answers whose id was in the batch that produced them."""
+    ids = {r["id"] for r in sent}
+    # the model likes non-breaking hyphens ("power‑play"), which break CSV/Excel search
+    return {k: v.replace("‑", "-") for k, v in got.items() if k in ids and v}
+
+
 def add_rationales(df: pd.DataFrame, fields: list[str], label: str,
                    top_n: int = 15, api_key: str | None = None,
                    system: str | None = None) -> pd.DataFrame:
@@ -273,9 +259,14 @@ def add_rationales(df: pd.DataFrame, fields: list[str], label: str,
     split = 0
     for i in range(0, len(rows), MAX_PER_CALL):
         chunk = rows[i:i + MAX_PER_CALL]
+        # Ids are already positions in the WHOLE shortlist (see the loop above), so
+        # they are used as returned. Adding the chunk offset again — as the MLB copy of
+        # this code does — pinned sentences to the wrong player after any split, and
+        # pushed every chunk past the first off the end of the list. Ids outside the
+        # chunk are discarded rather than trusted.
         try:
             got = _call(chunk, api_key, system)
-            texts.update({k + i: v for k, v in got.items()})
+            texts.update(_own(got, chunk))
         except Exception as exc:  # noqa: BLE001 — never let this break the pipeline
             # Retry at half size: an empty completion is usually the model running out
             # of output room, which a smaller batch fixes.
@@ -285,7 +276,7 @@ def add_rationales(df: pd.DataFrame, fields: list[str], label: str,
                 sub = chunk[j:j + half]
                 try:
                     got = _call(sub, api_key, system)
-                    texts.update({k + i + j: v for k, v in got.items()})
+                    texts.update(_own(got, sub))
                 except Exception:
                     print(f"  WARN  {label}: {len(sub)} picks unexplained ({exc})")
                 time.sleep(PAUSE_BETWEEN_CALLS)

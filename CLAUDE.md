@@ -67,40 +67,54 @@ implications at both ends of the ice. Needs injury/scratch data — see open pro
   to get around the challenge. We told the client we build from the official feed —
   the same raw data MoneyPuck builds from — and that our shot-quality measure is our
   own, not a copy of theirs.
-- Odds: The Odds API, sport key `icehockey_nhl`. If the same key as MLB is used, the
-  500-credit monthly budget is SHARED with MLB.
+- Odds: The Odds API, sport key `icehockey_nhl`. NHL has its OWN key on a separate
+  Odds account from MLB, so its 500-credit monthly budget is NOT shared.
 
-## Open problems — solve before promising behaviour
+## Data decisions (settled 2 Oct 2026) and what is still open
 
-1. **Starting goalies.** The feed marks `starter` only after the game. We told him the
-   system projects the likely starter from recent usage (last starts, back-to-backs,
-   rest days) and labels it PROJECTED until confirmed. A confirmation source is TBD.
-2. **Injuries / scratches** (needed for his add-on). Not in the official feed pre-game.
-   Find a source that permits automated access before designing around it.
-3. **Run schedule.** The copied Netlify scheduled functions still carry MLB's five
-   slots (13:07, 15:37, 18:07, 21:07, 23:07 UTC). NHL games are mostly evenings ET and
-   goalies firm up on game day — redesign the slots before the first deploy.
+1. **Starting goalies — official feed only** (`propline/goalies.py`). Projected from
+   usage: current-roster goalies, starts in the team's last 10, last season's workload
+   as a prior while the season is young, back-to-back -> backup. Labelled PROJECTED with
+   confidence high/lean. If tonight's game roster is posted and omits him, switch.
+   CONFIRMED only from the boxscore `starter` flag (i.e. once the game is on).
+   Rejected: DailyFaceoff (robots allows the page, but no published terms granting
+   automated use; it is a commercial site), ESPN (terms forbid automated access; its
+   API host 403s robots.txt), Rotowire (commercial). Revisit only if Tayyab decides.
+2. **Injuries / scratches — official feed only** (`propline/availability.py`). A
+   current-roster skater who did not dress for his team's latest game(s) is OUT until
+   he plays again. Tonight's game-day list (play-by-play `rosterSpots`) then refines it.
+   **Measured 3 Oct 2026** (13 games, `scripts/watch_rosters.py`): the list posts
+   96-156 min before puck drop (~2h) as an EXTENDED list of 43-46 names (~23 per team,
+   extras and 3rd goalies included), and is trimmed to the 40 who dress only later
+   (post-game it matched the boxscore exactly). So: NOT on the list = OUT (certain);
+   on an extended list = still projected; on a list of <=20 per team = confirmed.
+   Known blind spot: a same-day injury is unknown until the list posts.
+3. **Run schedule (set 4 Oct 2026)** — Netlify, UTC, chosen to hold across the 1 Nov
+   US clock change: 12:07 morning (Groq), 17:37 midday, 22:37 pregame (Groq), 01:37
+   late. The workflow dates the slate in US Eastern time so the 01:37 run is "tonight".
 
-## Copied from MLB on 2 Oct 2026 — status of each file
+Stats API trap: every response is capped at 10,000 rows and `total` then reads 10,000,
+so a capped pull looks complete. `nhl._stats` raises at the cap; skater logs are pulled
+in 14-day chunks. Last season's logs are cached in `data/cache/{season}/`.
 
-Generic, usable as-is: `propline/db.py`, `propline/storage.py`,
-`propline/intermediate.py`, `netlify/lib/github.mjs`, `netlify/functions/config.mjs`,
-`netlify/functions/trigger.mjs`, `api/*`, `netlify.toml`, `requirements.txt`,
-`.gitignore`, `.claude/launch.json` (port 5174 so it runs beside MLB's 5173).
+## Status (3 Oct 2026)
 
-Needs NHL adaptation — the engine is reusable, the baseball content is not:
-- `propline/publish.py` — `PROP_DETAIL` / `PITCHER_DETAIL` / `GAME_DETAIL` are MLB fields
-- `propline/rationale.py` — `SYSTEM` / `TOTALS_SYSTEM` prompts describe baseball
-- `propline/odds.py` — `SPORT` already set to `icehockey_nhl`; markets are still MLB's
-  (`pitcher_strikeouts`), and the budget comments describe MLB
-- `propline/output.py` — per-prop Excel columns are MLB
-- `scripts/healthcheck.py` — strikeout-line and arsenal checks are MLB
-- `db/schema.sql` — `bullpen_status` is MLB-only (NHL equivalent: goalie status)
-- `web/index.html` — prop tabs, column sets and the strikeout arsenal expander are MLB
-- `.github/workflows/daily.yml` and `netlify/functions/scheduled-slate*.mjs` — slots
+Schema is live in the NHL Supabase (run 3 Oct). Pipeline runs end to end locally and
+publishes; dashboard (`web/index.html`) reads it on localhost:5174. Nothing committed
+or pushed yet; no Netlify deploy yet.
 
-Not copied (sport-specific, rebuild for hockey): collect/process scripts, Savant,
-mlb.py, rolling, profiles, matchup, scoring, arsenal, weather (all NHL arenas indoor).
+Done for hockey: `propline/nhl.py`, `goalies.py`, `availability.py`, `teams.py`,
+`scoring.py`, `output.py`, `publish.py`, `rationale.py` (hockey prompts; id-alignment
+bug fixed — MLB still has it, flagged separately), `scripts/collect.py`,
+`scripts/process.py`, `db/schema.sql`, `web/index.html`, `.github/workflows/daily.yml`
+(drafted; Groq only on morning + pregame slots).
+
+GitHub secrets added (4 Oct). Still to do before first deploy:
+- Create the Netlify site from the repo with env: SUPABASE_URL, SUPABASE_ANON_KEY,
+  GITHUB_REPO, GITHUB_BRANCH, GITHUB_TOKEN (fine-grained, propline-nhl only, Actions
+  read/write), UPDATE_SECRET. Then one manual Update Now to prove the CI path.
+- `scripts/healthcheck.py` is still MLB content and is not run by the workflow.
+- `propline/odds.py` is MLB markets — Phase 2.
 
 ## Principles carried over from MLB
 
@@ -124,4 +138,5 @@ mlb.py, rolling, profiles, matchup, scoring, arsenal, weather (all NHL arenas in
   skips deploys when `web/`, `netlify/` and `netlify.toml` are unchanged.
 - Account-level quotas are SHARED with MLB even though the projects are separate:
   GitHub Actions minutes (2,000/month across all private repos), Netlify credits
-  (300/month across all sites on the team), and Groq/Odds if the same keys are reused.
+  (300/month across all sites on the team), and Groq (same key as MLB, confirmed 2 Oct 2026).
+  Odds is NOT shared: separate accounts, like Supabase.
