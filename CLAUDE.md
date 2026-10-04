@@ -97,24 +97,23 @@ Stats API trap: every response is capped at 10,000 rows and `total` then reads 1
 so a capped pull looks complete. `nhl._stats` raises at the cap; skater logs are pulled
 in 14-day chunks. Last season's logs are cached in `data/cache/{season}/`.
 
-## Status (3 Oct 2026)
+## Status (4 Oct 2026) — LIVE
 
-Schema is live in the NHL Supabase (run 3 Oct). Pipeline runs end to end locally and
-publishes; dashboard (`web/index.html`) reads it on localhost:5174. Nothing committed
-or pushed yet; no Netlify deploy yet.
+Site: https://propline-nhl.netlify.app (Netlify, same team as MLB). Repo is public.
+First CI run via Update Now succeeded 4 Oct (run 37196350513, ~1 min, 0 billable
+minutes). Scheduled slots go live from the next slot after deploy.
 
-Done for hockey: `propline/nhl.py`, `goalies.py`, `availability.py`, `teams.py`,
-`scoring.py`, `output.py`, `publish.py`, `rationale.py` (hockey prompts; id-alignment
-bug fixed — MLB still has it, flagged separately), `scripts/collect.py`,
-`scripts/process.py`, `db/schema.sql`, `web/index.html`, `.github/workflows/daily.yml`
-(drafted; Groq only on morning + pregame slots).
+Fixed on the way: GitHub secrets with a trailing newline broke the auth header —
+`db.env()` now strips all secrets. GitHub token must be fine-grained, only
+propline-nhl, Repository permission "Actions: Read and write" (repo access and the
+permission must be saved in the same edit or GitHub drops the repo selection).
 
-GitHub secrets added (4 Oct). Still to do before first deploy:
-- Create the Netlify site from the repo with env: SUPABASE_URL, SUPABASE_ANON_KEY,
-  GITHUB_REPO, GITHUB_BRANCH, GITHUB_TOKEN (fine-grained, propline-nhl only, Actions
-  read/write), UPDATE_SECRET. Then one manual Update Now to prove the CI path.
-- `scripts/healthcheck.py` is still MLB content and is not run by the workflow.
-- `propline/odds.py` is MLB markets — Phase 2.
+Still open:
+- Watch the first scheduled runs (midday 17:37, pregame 22:37 with Groq, late 01:37,
+  morning 12:07 with Groq) in pipeline_runs.
+- Client guide + message to Devin when Tayyab is ready.
+- `scripts/healthcheck.py` is still MLB content (not run by the workflow).
+- Phase 2: `propline/odds.py` markets, team/game SOG + PPG props, ML/PL ratings.
 
 ## Principles carried over from MLB
 
