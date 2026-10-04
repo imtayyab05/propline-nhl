@@ -132,11 +132,15 @@ GitHub secrets added (4 Oct). Still to do before first deploy:
 - Python is NOT on PATH: use `D:/Programming/Anaconda/python.exe`. Bare `python` opens
   the Windows Store stub and hangs.
 - No `gh` CLI and no GitHub token locally — read run logs from `pipeline_runs`.
-- Repo stays PRIVATE. The client will not add payment methods for any service.
+- The NHL repo is PUBLIC by Tayyab's decision (4 Oct 2026). Do not re-raise it. It
+  means nothing secret may ever be committed: keys stay in `.env` / GitHub secrets /
+  Netlify env, and generated data stays git-ignored. Scan staged diffs for keys
+  before every commit. The client will not add payment methods for any service.
 - One scheduler only (Netlify). Never add GitHub's `schedule:` back alongside it.
 - Batch pushes: Netlify deploys cost credits, and the `ignore` rule in `netlify.toml`
   skips deploys when `web/`, `netlify/` and `netlify.toml` are unchanged.
 - Account-level quotas are SHARED with MLB even though the projects are separate:
-  GitHub Actions minutes (2,000/month across all private repos), Netlify credits
+  GitHub Actions minutes (2,000/month across private repos — NHL is public, so its
+  runs do not draw on that pool), Netlify credits
   (300/month across all sites on the team), and Groq (same key as MLB, confirmed 2 Oct 2026).
   Odds is NOT shared: separate accounts, like Supabase.

@@ -78,7 +78,7 @@ class OddsError(RuntimeError):
 
 
 def _key() -> str | None:
-    return os.getenv("ODDS_API_KEY")
+    return (os.getenv("ODDS_API_KEY") or "").strip() or None  # see db.env
 
 
 def _get(path: str, **params):

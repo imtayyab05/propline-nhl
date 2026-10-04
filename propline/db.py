@@ -27,9 +27,21 @@ class SupabaseError(RuntimeError):
     pass
 
 
+def env(name: str) -> str | None:
+    """Read a secret with stray whitespace removed.
+
+    A secret pasted into GitHub with a trailing newline reached the Authorization
+    header as "key
+", and http.client refused to send it ("Invalid header value") —
+    the first CI run on 4 Oct 2026 died that way after a perfectly good collection.
+    """
+    v = os.getenv(name)
+    return v.strip() if v else v
+
+
 def _creds():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_KEY")
+    url = env("SUPABASE_URL")
+    key = env("SUPABASE_SERVICE_KEY")
     if not url or not key:
         raise SupabaseError(
             "SUPABASE_URL / SUPABASE_SERVICE_KEY missing — copy .env.example to .env "
@@ -189,8 +201,10 @@ def log_run(slate_date, run_type, stage, status, detail=None, started_at=None) -
     }])
     try:
         upsert("pipeline_runs", row)
-    except SupabaseError as exc:
-        # never let run-logging failure take down an otherwise good run
+    except Exception as exc:  # noqa: BLE001
+        # never let run-logging failure take down an otherwise good run. Was
+        # SupabaseError only, so a malformed key (ValueError from http.client) slipped
+        # through and failed a run whose data was fine.
         print(f"  WARN  could not log run: {exc}")
 
 
@@ -202,7 +216,7 @@ def read(table: str, params: dict | None = None, use_anon: bool = False) -> list
     silently sail past.
     """
     url, service = _creds()
-    key = os.getenv("SUPABASE_ANON_KEY") if use_anon else service
+    key = env("SUPABASE_ANON_KEY") if use_anon else service
     if not key:
         raise SupabaseError("SUPABASE_ANON_KEY missing — needed to read as the dashboard does")
     r = requests.get(f"{url}/rest/v1/{table}",

@@ -231,7 +231,7 @@ def add_rationales(df: pd.DataFrame, fields: list[str], label: str,
     if df.empty:
         return df
 
-    api_key = api_key or os.getenv("GROQ_API_KEY")
+    api_key = (api_key or os.getenv("GROQ_API_KEY") or "").strip()  # see db.env
     if not api_key:
         print("  WARN  GROQ_API_KEY missing — picks will have no written reasons")
         return df

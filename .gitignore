@@ -33,3 +33,5 @@ run.txt
 # scratch
 .tmp_docx/
 data/roster_timing_*.csv
+token.txt
+*.token
