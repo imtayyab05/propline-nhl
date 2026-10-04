@@ -133,7 +133,7 @@ def _shape(df: pd.DataFrame, spec, top_n=None) -> pd.DataFrame:
 
 
 def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
-                         out_path, run_meta: dict, top_n: int = 40) -> Path:
+                         out_path, run_meta: dict, top_n: int | None = None) -> Path:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 

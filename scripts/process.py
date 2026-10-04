@@ -101,7 +101,9 @@ def explain(player_scores, total_goals, top_n):
 def main() -> int:
     ap = argparse.ArgumentParser(description="PropLine NHL — processing")
     ap.add_argument("--date", default=date.today().isoformat())
-    ap.add_argument("--top", type=int, default=40, help="rows per prop tab in Excel")
+    ap.add_argument("--top", type=int, default=0,
+                    help="rows per prop tab in Excel; 0 = every scored player. Was 40 "
+                         "until the client noticed exports stopped there (MLB, 3 Oct 2026)")
     ap.add_argument("--publish-top", type=int, default=0,
                     help="rows per prop written to the database; 0 means all")
     ap.add_argument("--no-rationale", action="store_true", help="skip the Groq step")

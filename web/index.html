@@ -279,6 +279,11 @@
   th.l10{color:var(--dim)}
   .up{color:var(--good)} .down{color:var(--bad)}
   .note{padding:10px 2px 0;color:var(--muted);font-size:13px}
+  /* Sortable headers: a click re-sorts the whole board, not just the visible page. */
+  th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+  th.sortable:hover{color:var(--text)}
+  th.sorted{color:var(--accent)}
+  th .arr{margin-left:5px;font-size:.75em}
 
   footer{padding:34px 24px;border-top:1px solid var(--line);color:var(--dim);
          font-size:13px;display:flex;gap:14px;flex-wrap:wrap;
@@ -868,109 +873,156 @@ const TEAM_PAIRS = [
   ['Times SH/G', 'pen_taken_pg', num2],
 ];
 
-function cellValue(row, key, fmt){
-  const d = row.details || {};
-  const v = row[key] !== undefined ? row[key] : d[key];
-  if (v == null || v === '') return '';
-  return fmt ? fmt(v) : v;
-}
-
 const confBadge = c => c ? `<span class="c-${esc(c)}">${esc(c)}</span>` : '';
+const CONF_ORDER = {confirmed:3, high:2, lean:1, none:0};
+const ROSTER_SRC = {game_roster:"tonight's game roster", recent_games:'recent games', none:''};
 
-function head(cols){ return `<tr>${cols.map(c=>typeof c === 'string'
-  ? `<th>${esc(c)}</th>` : `<th class="${c[1]}">${esc(c[0])}</th>`).join('')}</tr>`; }
+/* ── columns ────────────────────────────────────────────────────────────
+   Each board is ONE list of columns. The header, the cells, click-to-sort and the
+   CSV export all read it, so they can never disagree about which column is which
+   (MLB be14172, 3 Oct 2026, after the client asked to sort boards on the site).
 
-function renderTeams(data){
-  $('#thead').innerHTML = head(['Power #','Team','Power Score','GP','Record','Pts%',
-    ...TEAM_PAIRS.flatMap(([l])=>[l, [l+' L10','l10']]), 'L10 Record']);
-  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
-    <td class="rank">${r.power_rank}</td>
-    <td class="name">${esc(r.team)} <span class="thin" style="color:var(--dim)">${esc(r.team_name||'')}</span></td>
-    <td class="score ${scoreClass(r.power_score)}">${r.power_score}</td>
-    <td class="num">${r.gp ?? 0}</td>
-    <td class="num">${esc(r.record||'—')}</td>
-    <td class="num">${r.points_pct!=null?pctF(r.points_pct):''}</td>
-    ${TEAM_PAIRS.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>
-      <td class="num l10">${esc(cellValue(r,'l10_'+k,f))}</td>`).join('')}
-    <td class="num l10">${esc(r.l10_record||'')}</td></tr>`).join('');
+   A column: label · get(row) = the raw value it SORTS on · fmt(value,row) = the
+   plain text shown and exported · html(row) = optional richer cell (badges) ·
+   cls = cell class · asc = first click sorts low-to-high (ranks). */
+const C = (label, get, fmt, extra={}) => ({label, get, fmt, cls:'num', ...extra});
+const fromKey = (label, key, fmt) => C(label, r=>rawValue(r, key), fmt ? v=>fmt(v) : undefined);
+
+function rawValue(r, key){
+  const d = r.details || {};
+  return r[key] !== undefined ? r[key] : d[key];
 }
 
-function renderGoalies(data){
-  $('#thead').innerHTML = head(['Team','Goalie','Status','Confidence','Why',
-                                'SV% (adj)','Back-to-Back','Other Goalie']);
-  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
-    <td class="num">${esc(r.team)}</td>
-    <td class="name">${esc(r.goalie_name||'—')}</td>
-    <td>${r.status==='confirmed' ? '<span class="badge b-conf">confirmed</span>'
-                                 : '<span class="badge b-proj">projected</span>'}</td>
-    <td>${confBadge(r.confidence)}</td>
-    <td class="why">${esc(r.reason||'')}</td>
-    <td class="num">${sv3(r.sv_pct)}</td>
-    <td class="num">${r.back_to_back ? 'yes' : ''}</td>
-    <td class="num">${esc(r.backup_name||'')}</td></tr>`).join('');
-}
+function columnsFor(){
+  const kind = PROPS.find(p=>p.key===current).kind;
+  const why = C('Why', r=>r.rationale, null, {cls:'why'});
+  const score = (key='score') => C('Score', r=>r[key], null,
+    {html: r=>`<td class="score ${scoreClass(r[key])}">${r[key] ?? ''}</td>`});
 
-function renderOut(data){
-  $('#thead').innerHTML = head(['Team','Player','Pos','Usual TOI','Games Missed','Why','Source']);
-  const src = {game_roster:'tonight\'s game roster', recent_games:'recent games', none:''};
-  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
-    <td class="num">${esc(r.team)}</td>
-    <td class="name">${esc(r.player_name)}</td>
-    <td class="num">${esc(r.position||'')}</td>
-    <td class="num">${mins(r.base_toi)}</td>
-    <td class="num">${r.games_missed ?? ''}</td>
-    <td class="why">${esc(r.reason||'')}</td>
-    <td class="num">${esc(src[r.status_source] ?? r.status_source ?? '')}</td></tr>`).join('');
-}
+  if (kind === 'teams') return [
+    C('Power #', r=>r.power_rank, null, {cls:'rank', asc:true}),
+    C('Team', r=>r.team, null, {html: r=>`<td class="name">${esc(r.team)}
+      <span style="color:var(--dim)">${esc(r.team_name||'')}</span></td>`}),
+    score('power_score'),
+    C('GP', r=>r.gp ?? 0),
+    // sorts on points, shows the record
+    C('Record', r=>r.points, (v, r)=>r.record || '—'),
+    C('Pts%', r=>r.points_pct, v=>pctF(v)),
+    ...TEAM_PAIRS.flatMap(([l, k, f]) => [
+      C(l, r=>r[k], v=>f(v)),
+      C(l+' L10', r=>r['l10_'+k], v=>f(v), {cls:'num l10', hcls:'l10'})]),
+    C('L10 Record', r=>r.l10_record, null, {cls:'num l10'}),
+  ];
 
-function renderGame(data){
-  const extra = EXTRA_COLS[current] || [];
-  $('#thead').innerHTML = head(['#','Matchup','Score','Goalies (away / home)',
-                                ...extra.map(c=>c[0]), 'Why']);
-  return data.map((r,i)=>`<tr style="--i:${Math.min(i,26)}">
-    <td class="rank">${r.rank}</td>
-    <td class="name">${esc(r.subject)}</td>
-    <td class="score ${scoreClass(r.score)}">${r.score}</td>
-    <td class="num">${esc(r.goalies_status||'')}</td>
-    ${extra.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>`).join('')}
-    <td class="why">${esc(r.rationale||'')}</td></tr>`).join('');
-}
-
-function renderPlayer(data){
-  const extra = [...(EXTRA_COLS[current] || []), ...PLAYER_TAIL];
-  $('#thead').innerHTML = head(['#','Player','Pos','Team','Opp','Score','Lineup','Recent',
-                                ...extra.map(c=>c[0]), 'Why']);
-  return data.map((r,i)=>{
-    const d = r.details || {};
-    const games = d.recent_games;
-    const thin = games != null && games < 7;
-    const badge = r.lineup_status === 'confirmed'
+  if (kind === 'goalies') return [
+    C('Team', r=>r.team),
+    C('Goalie', r=>r.goalie_name, v=>v || '—', {cls:'name'}),
+    C('Status', r=>r.status, null, {html: r=>`<td>${r.status==='confirmed'
       ? '<span class="badge b-conf">confirmed</span>'
-      : '<span class="badge b-proj">projected</span>';
-    return `<tr style="--i:${Math.min(i,26)}">
-      <td class="rank">${r.rank}</td>
-      <td class="name">${esc(r.subject_name)}</td>
-      <td class="num">${esc(d.position||'')}</td>
-      <td class="num">${esc(r.team||'')}</td>
-      <td class="num">${esc(r.opponent||'')}</td>
-      <td class="score ${scoreClass(r.score)}">${r.score}</td>
-      <td>${badge}</td>
-      <td class="num ${thin?'thin':''}">${games!=null?`${games} G`:'—'}</td>
-      ${extra.map(([, k, f])=>`<td class="num">${esc(cellValue(r,k,f))}</td>`).join('')}
-      <td class="why">${esc(r.rationale||'')}</td></tr>`;
-  }).join('');
+      : '<span class="badge b-proj">projected</span>'}</td>`}),
+    // sorts by how sure we are, not alphabetically
+    C('Confidence', r=>CONF_ORDER[r.confidence] ?? null, (v, r)=>r.confidence || '',
+      {html: r=>`<td>${confBadge(r.confidence)}</td>`}),
+    C('Why', r=>r.reason, null, {cls:'why'}),
+    C('SV% (adj)', r=>r.sv_pct, v=>sv3(v)),
+    C('Back-to-Back', r=>r.back_to_back, v=>v ? 'yes' : ''),
+    C('Other Goalie', r=>r.backup_name),
+  ];
+
+  if (kind === 'out') return [
+    C('Team', r=>r.team),
+    C('Player', r=>r.player_name, null, {cls:'name'}),
+    C('Pos', r=>r.position),
+    C('Usual TOI', r=>r.base_toi, v=>mins(v)),
+    C('Games Missed', r=>r.games_missed),
+    C('Why', r=>r.reason, null, {cls:'why'}),
+    C('Source', r=>r.status_source, v=>ROSTER_SRC[v] ?? v ?? ''),
+  ];
+
+  const extra = (EXTRA_COLS[current] || []).map(([l, k, f]) => fromKey(l, k, f));
+  const rank = C('#', r=>r.rank, null, {cls:'rank', asc:true});
+
+  if (kind === 'game') return [rank,
+    C('Matchup', r=>r.subject, null, {cls:'name'}),
+    score(),
+    C('Goalies (away / home)', r=>r.goalies_status),
+    ...extra, why];
+
+  return [rank,
+    C('Player', r=>r.subject_name, null, {cls:'name'}),
+    fromKey('Pos', 'position'),
+    C('Team', r=>r.team),
+    C('Opp', r=>r.opponent),
+    score(),
+    C('Lineup', r=>r.lineup_status, null, {html: r=>`<td>${r.lineup_status === 'confirmed'
+      ? '<span class="badge b-conf">confirmed</span>'
+      : '<span class="badge b-proj">projected</span>'}</td>`}),
+    C('Recent', r=>(r.details||{}).recent_games, v=>v != null ? `${v} G` : '—',
+      {html: r=>{ const g = (r.details||{}).recent_games;
+        return `<td class="num ${g != null && g < 7 ? 'thin' : ''}">${g != null ? g+' G' : '—'}</td>`; }}),
+    ...extra,
+    ...PLAYER_TAIL.map(([l, k, f]) => fromKey(l, k, f)),
+    why];
 }
 
-const RENDERERS = {player:renderPlayer, game:renderGame, teams:renderTeams,
-                   goalies:renderGoalies, out:renderOut};
+const cellText = (c, r) => { const v = c.get(r);
+  return c.fmt ? c.fmt(v, r) : (v == null ? '' : v); };
+
+/* ── sorting ─────────────────────────────────────────────────────────── */
+let sortCol = null, sortDir = 1;   // sortCol null = the board's own order
+
+function sortKey(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  const n = Number(s.replace(/[%,]/g, ''));
+  return Number.isNaN(n) ? s.toLowerCase() : n;
+}
+
+function sortRows(list, col, dir){
+  return list.map((r, i) => ({r, i, k: sortKey(col.get(r))}))
+    .sort((a, b) => {
+      // blanks always last, whichever way the column is sorted
+      if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
+      if (typeof a.k !== typeof b.k) return typeof a.k === 'number' ? -1 : 1;
+      const c = typeof a.k === 'number' ? a.k - b.k : a.k.localeCompare(b.k);
+      return c * dir || a.i - b.i;   // ties keep the board's own order
+    })
+    .map(x => x.r);
+}
+
+// First click shows the best end first: high numbers, rank 1, text A-Z.
+function firstDir(col, list){
+  if (col.asc) return 1;
+  const k = list.map(r => sortKey(col.get(r))).find(x => x !== null);
+  return typeof k === 'number' ? -1 : 1;
+}
+
+function sortedRows(){
+  const all = filtered();
+  return sortCol === null ? all : sortRows(all, columnsFor()[sortCol], sortDir);
+}
 
 function render(){
-  const prop = PROPS.find(p=>p.key===current);
-  const all = filtered();
+  const kind = PROPS.find(p=>p.key===current).kind;
+  const cols = columnsFor();
+  // Sort the WHOLE filtered board first, then page it, so a sort reaches past row 60.
+  const all = sortedRows();
   const data = showAll ? all : all.slice(0, PAGE_ROWS);
-  $('#tbody').innerHTML = RENDERERS[prop.kind](data);
 
-  $('#empty').textContent = prop.kind === 'out'
+  $('#thead').innerHTML = '<tr>' + cols.map((c, i) => {
+    const on = i === sortCol;
+    const arrow = on ? `<span class="arr">${sortDir > 0 ? '\u25B2' : '\u25BC'}</span>` : '';
+    return `<th class="sortable${on ? ' sorted' : ''} ${c.hcls||''}" data-col="${i}"
+      title="Click to sort">${esc(c.label)}${arrow}</th>`;
+  }).join('') + '</tr>';
+
+  $('#tbody').innerHTML = data.map((r, i) =>
+    `<tr style="--i:${Math.min(i,26)}">${cols.map(c => c.html ? c.html(r)
+      : `<td class="${c.cls}">${esc(cellText(c, r))}</td>`).join('')}</tr>`).join('');
+
+  $('#empty').textContent = kind === 'out'
     ? 'No regulars are out for this slate.' : 'Nothing to show for this slate yet.';
   $('#empty').classList.toggle('hidden', data.length > 0);
 
@@ -1011,15 +1063,18 @@ function downloadXlsx(){
 }
 
 function downloadCsv(){
-  const data = filtered();
+  // Exactly the board on screen: every filtered row (not just the first page), every
+  // column, as displayed, in the current sort order.
+  const data = sortedRows();
   if (!data.length) return toast('Nothing to export.');
-  const cols = Object.keys(data[0]).filter(c=>c!=='details');
-  const cell = v => `"${String(v??'').replace(/"/g,'""')}"`;
-  const csv = [cols.join(','),
-    ...data.map(r=>cols.map(c=>cell(r[c])).join(','))].join('\n');
+  const cols = columnsFor();
+  const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [cols.map(c=>cell(c.label)).join(','),
+    ...data.map(r=>cols.map(c=>cell(cellText(c, r))).join(','))].join('\r\n');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-  a.download = `propline_${current}_${slateDate}.csv`;
+  // BOM so Excel reads accented names (Stützle, Šesťorkin) as UTF-8
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], {type:'text/csv'}));
+  a.download = `propline_nhl_${current}_${slateDate}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
 
@@ -1087,6 +1142,7 @@ async function init(){
     const t = e.target.closest('.tab'); if(!t) return;
     current = t.dataset.k;
     showAll = false;
+    sortCol = null; sortDir = 1;   // each board opens in its own order
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x===t));
     loadProp().catch(err=>toast(err.message));
   });
@@ -1094,6 +1150,14 @@ async function init(){
   ['search','teamfilter','statusfilter'].forEach(id=>
     $('#'+id).addEventListener('input', ()=>{ showAll = false; render(); }));
   $('#more').addEventListener('click', ()=>{ showAll = true; render(); });
+  // Click a column header to sort the whole board; click it again to reverse.
+  $('#thead').addEventListener('click', e=>{
+    const th = e.target.closest('th[data-col]'); if (!th) return;
+    const i = +th.dataset.col;
+    if (sortCol === i) sortDir = -sortDir;
+    else { sortCol = i; sortDir = firstDir(columnsFor()[i], filtered()); }
+    render();
+  });
   $('#slate').addEventListener('change', e=>{ slateDate = e.target.value; refresh(); });
   $('#refresh').addEventListener('click', refresh);
   $('#update').addEventListener('click', updateNow);
