@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .db import check_json, delete_where, upsert
+from .db import check_json, delete_where, read, upsert
 
 # Stored alongside each pick so the dashboard can show the "why" without recomputing.
 # Per prop, matching the Excel tabs. The internal exp_* signals are NOT published.
@@ -68,6 +68,28 @@ def _clean(v):
 def _details(df: pd.DataFrame, cols: list[str]) -> pd.Series:
     present = [c for c in cols if c in df.columns]
     return df[present].apply(lambda r: {k: _clean(v) for k, v in r.items()}, axis=1)
+
+
+def _keep_rationale(table: str, df: pd.DataFrame, day: str, keys: list[str]) -> pd.DataFrame:
+    """Carry the Why text forward from the slate's earlier run when this run wrote none.
+
+    Groq runs only on the morning and pre-game slots (its quota is shared with MLB), and
+    every publish replaces the whole board, so the midday run on 4 Oct 2026 wiped the
+    morning's sentences. A sentence cites season and last-10 numbers that do not move
+    during the day, so reusing it until the next Groq run is safe; a fresh one always
+    wins over a carried one.
+    """
+    if "rationale" not in df or df["rationale"].notna().all():
+        return df
+    prev = read(table, {"select": ",".join(keys + ["rationale"]),
+                        "slate_date": f"eq.{day}", "rationale": "not.is.null",
+                        "limit": "5000"})
+    if not prev:
+        return df
+    old = pd.DataFrame(prev).rename(columns={"rationale": "_old"})
+    out = df.merge(old, on=keys, how="left")
+    out["rationale"] = out["rationale"].where(out["rationale"].notna(), out["_old"])
+    return out.drop(columns="_old")
 
 
 def _snapshot(table: str, df: pd.DataFrame, filters: dict, on_conflict: str) -> int:
@@ -134,6 +156,7 @@ def publish_slate(slate_date, schedule, starters, avail, player_scores, total_go
             }))
         allp = pd.concat(picks, ignore_index=True).drop_duplicates(
             subset=["slate_date", "prop", "subject_id"])
+        allp = _keep_rationale("prop_picks", allp, day, ["prop", "subject_id"])
         written["prop_picks"] = _snapshot("prop_picks", allp, {"slate_date": f"eq.{day}"},
                                           "slate_date,prop,subject_id")
 
@@ -145,6 +168,7 @@ def publish_slate(slate_date, schedule, starters, avail, player_scores, total_go
             "goalies_status": g["goalies_status"], "rationale": g.get("rationale"),
             "details": _details(g, GAME_DETAIL),
         })
+        rows = _keep_rationale("game_picks", rows, day, ["prop", "game_id"])
         written["game_picks"] = _snapshot("game_picks", rows, {"slate_date": f"eq.{day}"},
                                           "slate_date,prop,game_id,subject")
 
