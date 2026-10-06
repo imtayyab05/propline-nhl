@@ -13,11 +13,12 @@ from .db import check_json, delete_where, read, upsert
 # Stored alongside each pick so the dashboard can show the "why" without recomputing.
 # Per prop, matching the Excel tabs. The internal exp_* signals are NOT published.
 PROP_DETAIL = {
-    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos"],
-    "goals": ["goals_recent", "goals60", "sh_pct", "sog_pg_recent", "pp_toi_recent",
+    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "hd_pg"],
+    "goals": ["goals_recent", "goals60", "sh_pct", "ixg60", "hd_pg", "sog_pg_recent",
+              "pp_toi_recent",
               "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
     "assists": ["assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
-    "points": ["points_pg_recent", "points60", "pp_toi_recent", "opp_ga",
+    "points": ["points_pg_recent", "points60", "ixg60", "pp_toi_recent", "opp_ga",
                "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
     "ppp": ["ppp_recent", "ppp_pg", "pp_toi_recent", "pp_toi_bump", "opp_pen_taken",
             "opp_pk_pct"],
@@ -29,12 +30,13 @@ GAME_DETAIL = ["home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
                "away_goalie_sv", "goalies_lean", "combined_pp_threat",
                "missing_regulars", "missing_names", "market_total", "over_price",
-               "under_price"]
+               "under_price", "combined_xg"]
 
 # Phase 2 boards. Team boards carry `team` so the dashboard's team filter finds them;
 # every board carries home_team / away_team for the same reason.
 BOARD_DETAIL = {
-    "team_goals": ["team", "opponent", "gf", "opp_ga", "opp_goalie", "opp_goalie_sv",
+    "team_goals": ["team", "opponent", "gf", "xgf", "opp_ga", "opp_xga", "opp_goalie",
+                   "opp_goalie_sv",
                    "pp_threat", "l10_gf", "missing_names", "market_team_total",
                    "tt_over_price", "tt_under_price"],
     "team_sog": ["team", "opponent", "sf", "opp_sa", "l10_sf", "opp_l10_sa",
@@ -58,7 +60,10 @@ TEAM_COLS = ["team_id", "team", "team_name", "power_rank", "power_score", "gp", 
              "l10_gf_pg", "l10_ga_pg", "l10_sf_pg", "l10_sa_pg", "l10_ppg_pg",
              "l10_ppga_pg", "l10_pp_pct", "l10_pk_pct", "l10_pen_taken_pg"]
 TEAM_DETAIL = ["gf_pg_b", "ga_pg_b", "sf_pg_b", "sa_pg_b", "pp_pct_b", "pk_pct_b",
-               "goal_diff_pg_b", "shot_diff_pg_b", "l10_goal_diff_pg", "current_weight"]
+               "goal_diff_pg_b", "shot_diff_pg_b", "l10_goal_diff_pg", "current_weight",
+               # shot quality rides in details: no schema change needed
+               "xgf_pg", "xga_pg", "l10_xgf_pg", "l10_xga_pg", "xgf_pg_b", "xga_pg_b",
+               "xg_diff_pg_b", "xg_gp"]
 
 # Columns the database types as bigint/int. Pandas widens any column containing a
 # missing value to float, so an id arrives as "8478048.0" and Postgres rejects it.

@@ -36,11 +36,13 @@ WEIGHTS = {
         "exp_toi": 0.10,
     },
     "goals": {
-        "exp_goals": 0.40,            # expected shots x finishing x goalie
-        "goals60": 0.15,
-        "sog_pg_recent": 0.15,        # you cannot score without shooting
+        "exp_goals": 0.25,            # expected shots x finishing x goalie
+        "ixg60": 0.20,                # shot QUALITY: our expected goals per 60
+        "goals60": 0.10,
+        "sog_pg_recent": 0.10,        # you cannot score without shooting
         "opp_goalie_weak": 0.15,      # projected goalie's save % (inverted)
-        "exp_pp_toi": 0.15,           # PP is where goals come cheapest
+        "exp_pp_toi": 0.10,           # PP is where goals come cheapest
+        "opp_xga": 0.10,              # chance quality the opponent gives up
     },
     "assists": {
         "exp_assists": 0.40,
@@ -50,10 +52,11 @@ WEIGHTS = {
         "opp_ga": 0.15,
     },
     "points": {
-        "exp_points": 0.45,
+        "exp_points": 0.40,
         "points_pg_recent": 0.15,
         "exp_pp_toi": 0.15,
-        "opp_ga": 0.10,
+        "ixg60": 0.10,                # players who get to dangerous ice create points
+        "opp_xga": 0.05,
         "opp_goalie_weak": 0.15,
     },
     "ppp": {
@@ -64,11 +67,12 @@ WEIGHTS = {
         "opp_pk_weak": 0.10,          # and how badly it kills them
     },
     "total_goals": {
-        "combined_gf": 0.25,          # both teams' scoring
-        "combined_ga": 0.25,          # both teams' leakiness
+        "combined_gf": 0.20,          # both teams' scoring
+        "combined_ga": 0.20,          # both teams' leakiness
+        "combined_xg": 0.20,          # both teams' chance quality, for and against
         "combined_goalie_weak": 0.25,  # both projected goalies
-        "combined_pp_threat": 0.15,   # PP% x the other side's penalties
-        "combined_shots": 0.10,       # pace
+        "combined_pp_threat": 0.10,   # PP% x the other side's penalties
+        "combined_shots": 0.05,       # pace
     },
 }
 PLAYER_PROPS = ("sog", "points", "goals", "assists", "ppp")
@@ -210,6 +214,8 @@ def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
     lg = {c: team_tbl[c].mean() for c in ("ga_pg_b", "gf_pg_b", "pen_taken_pg_b",
                                           "pk_pct_b")}
     df["opp_ga"] = df["opponent"].map(t["ga_pg_b"])
+    if "xga_pg_b" in t:
+        df["opp_xga"] = df["opponent"].map(t["xga_pg_b"])
     df["team_gf"] = df["team"].map(t["gf_pg_b"])
     df["opp_pen_taken"] = df["opponent"].map(t["pen_taken_pg_b"])
     df["opp_pk_pct"] = df["opponent"].map(t["pk_pct_b"])
@@ -285,6 +291,11 @@ def score_total_goals(schedule, team_tbl, starters, quality, absences) -> pd.Dat
                                    t.at[a, "pp_pct_b"] * t.at[h, "pen_taken_pg_b"]),
             "combined_shots": (t.at[h, "sf_pg_b"] + t.at[a, "sf_pg_b"] +
                                t.at[h, "sa_pg_b"] + t.at[a, "sa_pg_b"]) / 2,
+            "combined_xg": ((t.at[h, "xgf_pg_b"] + t.at[a, "xgf_pg_b"] +
+                             t.at[h, "xga_pg_b"] + t.at[a, "xga_pg_b"]) / 2
+                            if "xgf_pg_b" in t else None),
+            "home_xgf_pg": t.at[h, "xgf_pg_b"] if "xgf_pg_b" in t else None,
+            "away_xgf_pg": t.at[a, "xgf_pg_b"] if "xgf_pg_b" in t else None,
             "home_gf_pg": t.at[h, "gf_pg_b"], "away_gf_pg": t.at[a, "gf_pg_b"],
             "home_ga_pg": t.at[h, "ga_pg_b"], "away_ga_pg": t.at[a, "ga_pg_b"],
             "home_goalie": hg.get("name"), "away_goalie": ag.get("name"),

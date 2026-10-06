@@ -24,11 +24,13 @@ from .scoring import _goalie_sv, _weighted
 WEIGHTS = {
     # team goals tonight
     "team_goals": {
-        "gf": 0.30,                # its own scoring rate
-        "opp_ga": 0.25,            # what the opponent gives up
+        "gf": 0.20,                # its own scoring rate
+        "xgf": 0.15,               # the quality of chances it creates
+        "opp_ga": 0.15,            # what the opponent gives up
+        "opp_xga": 0.10,           # the quality of chances the opponent allows
         "opp_goalie_weak": 0.25,   # the goalie it faces (1 - shrunk save %)
         "pp_threat": 0.10,         # its PP% x the opponent's penalties
-        "l10_gf": 0.10,            # current form
+        "l10_gf": 0.05,            # current form
     },
     "team_sog": {
         "sf": 0.40,                # shots it generates
@@ -62,8 +64,9 @@ WEIGHTS = {
 # Team strength for moneyline / puck line, in league-wide z-scores (so the weights are
 # comparable). v1 opinion, meant to be argued with like WEIGHTS.
 STRENGTH = {
-    "goal_diff_pg_b": 0.35,       # the best single measure of team strength
-    "shot_diff_pg_b": 0.20,       # steadier than goals
+    "goal_diff_pg_b": 0.25,       # the best single measure of team strength
+    "xg_diff_pg_b": 0.15,         # chance quality for minus against (propline/shots.py)
+    "shot_diff_pg_b": 0.15,       # steadier than goals
     "l10_goal_diff_pg": 0.10,     # form
     "special_teams_b": 0.10,      # PP% + PK%
 }
@@ -102,7 +105,12 @@ def home_ice_edge(team_logs: pd.DataFrame, team_tbl: pd.DataFrame, prev_season: 
         return HOME_ICE_FALLBACK
     gd = (prev["goals_for"] - prev["goals_against"]).mean()
     sd = (prev["shots_for"] - prev["shots_against"]).mean()
-    return float(STRENGTH["goal_diff_pg_b"] * gd / sg + STRENGTH["shot_diff_pg_b"] * sd / ss)
+    wg, ws = STRENGTH["goal_diff_pg_b"], STRENGTH["shot_diff_pg_b"]
+    # The xG term has a home edge too, but last season's shot file does not record which
+    # side was home. Assume it matches the goal + shot edge, scaled to its weight, rather
+    # than letting the xG weight silently shrink home ice.
+    wx = STRENGTH.get("xg_diff_pg_b", 0.0) if "xg_diff_pg_b" in team_tbl else 0.0
+    return float((wg * gd / sg + ws * sd / ss) * (wg + ws + wx) / (wg + ws))
 
 
 def team_context(schedule, team_tbl, starters, quality, absences,
@@ -118,8 +126,9 @@ def team_context(schedule, team_tbl, starters, quality, absences,
 
     # league-wide z-scores, so a team is measured against the league, not the slate
     tz = team_tbl.set_index("team")
-    zs = pd.DataFrame({c: _z(tz[c]) for c in STRENGTH})
-    base = sum(zs[c] * w for c, w in STRENGTH.items())
+    used = {c: w for c, w in STRENGTH.items() if c in tz and tz[c].notna().any()}
+    zs = pd.DataFrame({c: _z(tz[c]) for c in used})
+    base = sum(zs[c].fillna(0) * w for c, w in used.items())
 
     rows = []
     for _, g in schedule.iterrows():
@@ -142,6 +151,8 @@ def team_context(schedule, team_tbl, starters, quality, absences,
                 "home_team": g["home_team"], "away_team": g["away_team"],
                 "gf": t.at[team, "gf_pg_b"], "ga": t.at[team, "ga_pg_b"],
                 "gd": t.at[team, "gf_pg_b"] - t.at[team, "ga_pg_b"],
+                "xgf": t.at[team, "xgf_pg_b"] if "xgf_pg_b" in t else None,
+                "opp_xga": t.at[opp, "xga_pg_b"] if "xga_pg_b" in t else None,
                 "opp_ga": t.at[opp, "ga_pg_b"], "opp_gf": t.at[opp, "gf_pg_b"],
                 "l10_gf": t.at[team, "l10_gf_pg"] if "l10_gf_pg" in t else None,
                 "sf": t.at[team, "sf_pg_b"], "sa": t.at[team, "sa_pg_b"],
@@ -178,8 +189,10 @@ def strength_bands(team_tbl: pd.DataFrame) -> tuple[float, float]:
     """Thresholds for Slight / Moderate / Strong edges: the terciles of the strength gap
     across EVERY possible pairing in the league, so the bands are measured, not made up,
     and a one-game slate still gets an honest label."""
-    zs = pd.DataFrame({c: _z(team_tbl[c]) for c in STRENGTH})
-    s = sum(zs[c] * w for c, w in STRENGTH.items()).to_numpy()
+    used = {c: w for c, w in STRENGTH.items()
+            if c in team_tbl and team_tbl[c].notna().any()}
+    zs = pd.DataFrame({c: _z(team_tbl[c]) for c in used})
+    s = sum(zs[c].fillna(0) * w for c, w in used.items()).to_numpy()
     gaps = pd.Series([abs(x - y) for i, x in enumerate(s) for y in s[i + 1:]])
     return float(gaps.quantile(1 / 3)), float(gaps.quantile(2 / 3))
 

@@ -71,6 +71,9 @@ FIELD_GLOSSARY = """Field meanings (all numbers are real and may be quoted):
   starts with "projected", call him the PROJECTED or likely starter, never "starting"
 - opp_pen_taken: times per game the opponent goes shorthanded (gives power plays)
 - opp_pk_pct: the opponent's penalty-kill percent, already a percent
+- ixg60: expected goals per 60 minutes from the QUALITY of his shots (our own
+  shot-quality model: distance, angle, shot type, strength); ~0.9+ is a top shooter
+- hd_pg: dangerous shots per game - attempts from the most dangerous fifth of locations
 - recent_games: how many games the recent numbers cover (fewer = less reliable)"""
 
 SYSTEM = (

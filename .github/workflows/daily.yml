@@ -101,13 +101,24 @@ jobs:
           M=$(date -d "$DATE" +%-m); Y=$(date -d "$DATE" +%Y)
           if [ "$M" -ge 7 ]; then S=$((Y - 1)); else S=$((Y - 2)); fi
           echo "prev=${S}$((S + 1))" >> "$GITHUB_OUTPUT"
+          echo "cur=$((S + 1))$((S + 2))" >> "$GITHUB_OUTPUT"
           echo "Slate $DATE — $KIND"
 
       - name: Restore last season's logs
         uses: actions/cache@v4
         with:
-          path: data/cache
-          key: nhl-prev-season-${{ steps.cfg.outputs.prev }}
+          path: data/cache/${{ steps.cfg.outputs.prev }}
+          key: nhl-prev-logs-${{ steps.cfg.outputs.prev }}
+
+      # This season's shot locations (input to the xG model) grow by a few games a day.
+      # A cache key is write-once, so each run saves under its own key and restores the
+      # newest one: a run then fetches only the games finished since the last run.
+      - name: Restore this season's shot data
+        uses: actions/cache@v4
+        with:
+          path: data/cache/${{ steps.cfg.outputs.cur }}
+          key: nhl-shots-${{ steps.cfg.outputs.cur }}-${{ github.run_id }}
+          restore-keys: nhl-shots-${{ steps.cfg.outputs.cur }}-
 
       - name: Collect
         env:

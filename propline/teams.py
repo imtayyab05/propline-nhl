@@ -17,11 +17,12 @@ PRIOR_GP = 10
 RECENT = 10
 
 POWER_WEIGHTS = {
-    "goal_diff_pg_b": 0.35,       # the best single measure of team strength
+    "goal_diff_pg_b": 0.25,       # the best single measure of team strength
+    "xg_diff_pg_b": 0.15,         # chance quality for minus against (propline/shots.py)
     "shot_diff_pg_b": 0.20,       # steadier than goals, less luck
     "points_pct_b": 0.15,         # results
     "l10_goal_diff_pg": 0.15,     # current form
-    "special_teams_b": 0.15,      # PP% + PK%
+    "special_teams_b": 0.10,      # PP% + PK%
 }
 
 # per-game quantities summed from the logs, and how each is named for display
@@ -47,7 +48,7 @@ def _summarise(g: pd.DataFrame) -> dict:
 
 
 def team_table(team_logs: pd.DataFrame, teams: pd.DataFrame, season: int,
-               prev_season: int, day: str) -> pd.DataFrame:
+               prev_season: int, day: str, xg: pd.DataFrame | None = None) -> pd.DataFrame:
     """One row per team in the league: season, last-10 and blended numbers."""
     logs = team_logs[team_logs["game_date"] < day].sort_values("game_date")
     cur = logs[logs["season"] == season]
@@ -96,10 +97,17 @@ def team_table(team_logs: pd.DataFrame, teams: pd.DataFrame, season: int,
     df["l10_goal_diff_pg"] = (l10gd.fillna(df["goal_diff_pg_b"]) * w +
                               df["goal_diff_pg_b"] * (1 - w))
 
-    score = pd.Series(0.0, index=df.index)
+    if xg is not None and not xg.empty:
+        df = df.merge(xg, on="team_id", how="left")
+
+    # A missing input (no shot model) drops out and the rest are re-weighted, rather
+    # than every team scoring the same on it.
+    score, used = pd.Series(0.0, index=df.index), 0.0
     for col, wt in POWER_WEIGHTS.items():
-        score += df[col].rank(pct=True).fillna(0.5) * wt
-    df["power_score"] = (100 * score / sum(POWER_WEIGHTS.values())).round(1)
+        if col in df and df[col].notna().any():
+            score += df[col].rank(pct=True).fillna(0.5) * wt
+            used += wt
+    df["power_score"] = (100 * score / used).round(1)
     df["power_rank"] = df["power_score"].rank(ascending=False, method="min").astype(int)
     return df.sort_values("power_rank").reset_index(drop=True)
 

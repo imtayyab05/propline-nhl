@@ -1,0 +1,2 @@
+fit_season=20252026
+danger_threshold=0.11902

@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from propline.availability import team_absences  # noqa: E402
 from propline.db import load_env, log_run  # noqa: E402
 from propline.games import score_game_boards  # noqa: E402
+from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
+                            player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
 from propline import odds  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
@@ -49,7 +51,9 @@ ROUND = {"score": 1, "sog_pg_recent": 2, "shots60": 2, "goals60": 2, "assists60"
          "away_sa": 1, "home_pp_pct": 3, "away_pp_pct": 3,
          "home_opp_pen_taken": 2, "away_opp_pen_taken": 2, "gd": 2, "pick_gd": 2,
          "dog_gd": 2, "pick_gf": 2, "dog_ga": 2, "pick_ga": 2, "dog_gf": 2,
-         "pick_goalie_sv": 3, "dog_goalie_sv": 3}
+         "pick_goalie_sv": 3, "dog_goalie_sv": 3,
+         "ixg60": 2, "hd_pg": 2, "ixg_recent": 2, "xgf": 2, "opp_xga": 2, "combined_xg": 2, "home_xgf_pg": 2, "away_xgf_pg": 2,
+         "xgf_pg": 2, "xga_pg": 2, "l10_xgf_pg": 2, "l10_xga_pg": 2}
 
 
 def _round(df: pd.DataFrame) -> pd.DataFrame:
@@ -69,8 +73,8 @@ def _round(df: pd.DataFrame) -> pd.DataFrame:
 # What the model sees per board. Only facts that are shown on that board, so a
 # sentence can always be checked against the row beside it.
 RATIONALE_FIELDS = {
-    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "toi_recent"],
-    "goals": ["goals_recent", "goals60", "sh_pct", "sog_pg_recent", "opp_goalie",
+    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "toi_recent", "hd_pg"],
+    "goals": ["goals_recent", "ixg60", "hd_pg", "sog_pg_recent", "opp_goalie",
               "opp_goalie_sv", "opp_goalie_status"],
     "assists": ["assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
     "points": ["points_pg_recent", "points60", "pp_toi_recent", "opp_ga", "opp_goalie",
@@ -190,9 +194,30 @@ def main() -> int:
     goalie_logs = pd.read_csv(logs_dir / "goalie_logs.csv")
     skater_logs = pd.read_csv(logs_dir / "skater_logs.csv")
 
+    # Shot quality (our expected-goals model). Built before the team table because the
+    # power ranking uses xG difference. If the model or the shot data is missing the
+    # run carries on without it and SAYS so — every xG weight then drops out.
+    xg_players, xg_teams, xg_note = pd.DataFrame(), pd.DataFrame(), "unavailable"
+    try:
+        xg_tab, hd, prev_xg_players, prev_xg_teams = load_model()
+        shots_path = logs_dir / "shots.csv"
+        shots = pd.read_csv(shots_path) if shots_path.exists() else pd.DataFrame()
+        if not shots.empty:
+            shots["xg"] = apply_xg(shots, xg_tab)
+            cur_pg, cur_tg = player_game_xg(shots, hd), team_game_xg(shots, hd)
+        else:
+            cur_pg = cur_tg = pd.DataFrame()
+        xg_players = player_xg_rates(cur_pg, prev_xg_players, skater_logs, season, prev, day)
+        xg_teams = team_xg_table(cur_tg, prev_xg_teams, team_logs, teams, season, day)
+        xg_note = (f"shot data {int(meta.get('shot_games', 0))}/"
+                   f"{int(meta.get('done_games', 0))} games")
+    except Exception as exc:  # noqa: BLE001
+        xg_note = f"unavailable ({exc})"
+
     # Team stats are league-wide, so the tab is useful even on an off-day.
     print("\n[1/5] Team stats and power rankings")
-    team_tbl = team_table(team_logs, teams, season, prev, day)
+    print(f"  {'ok  ' if xg_note.startswith('shot data') else 'WARN'}  shot quality: {xg_note}")
+    team_tbl = team_table(team_logs, teams, season, prev, day, xg=xg_teams)
     no_prior = team_tbl["current_weight"].eq(1.0) & team_tbl["gp"].fillna(0).lt(10)
     print(f"  ok    {len(team_tbl)} teams; top 5: "
           f"{', '.join(team_tbl.head(5)['team'])}")
@@ -208,6 +233,8 @@ def main() -> int:
     else:
         print("\n[2/5] Player rates and goalies")
         rates = player_rates(skater_logs, season, prev, day)
+        if not xg_players.empty:
+            rates = rates.merge(xg_players, on="player_id", how="left")
         quality = goalie_quality(goalie_logs, season, prev, day)
         sv = dict(zip(quality["goalie_id"], quality["sv_pct"]))
         starters["sv_pct"] = starters["goalie_id"].map(sv)
@@ -278,6 +305,7 @@ def main() -> int:
         "Skipped: out": cov.get("out", 0),
         "Skipped: under 3 games of history": cov.get("too_few_games", 0),
         "Market lines": odds_note,
+        "Shot quality (xG)": xg_note,
         "Note": ("Scores rank tonight's slate 0-100; they are not probabilities. "
                  "Early season: rates lean on last season until this season has games."),
     }

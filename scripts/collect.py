@@ -33,6 +33,7 @@ from propline.db import load_env, log_run  # noqa: E402
 from propline.goalies import project_starters  # noqa: E402
 from propline.intermediate import build_intermediate  # noqa: E402
 from propline import nhl  # noqa: E402
+from propline.shots import season_shots  # noqa: E402
 
 
 def main() -> int:
@@ -116,6 +117,15 @@ def main() -> int:
         print(f"  WARN  {len(missing)} completed game(s) have no skater rows yet: "
               f"{sorted(missing)[:5]}")
 
+    # 3b. Shot locations for this season's finished games — the input to our expected-
+    # goals measure (propline/shots.py). Cached: only games finished since the last run
+    # are fetched. Last season's shot quality ships as committed totals instead.
+    shots = season_shots(sorted(done_games), season, Path("data/cache") / str(season) / "shots.csv")
+    shot_games = shots["game_id"].nunique() if not shots.empty else 0
+    print(f"  {'ok  ' if shot_games >= len(done_games) else 'WARN'}  shot data: "
+          f"{shot_games}/{len(done_games)} games ({shots.attrs['fetched']} fetched now"
+          f"{', ' + str(shots.attrs['failed']) + ' failed' if shots.attrs['failed'] else ''})")
+
     # 4. Rosters for tonight's teams
     print("\n[4/6] Current rosters")
     playing = sorted(set(schedule["home_team"]) | set(schedule["away_team"]))
@@ -147,13 +157,14 @@ def main() -> int:
     # 6. Write
     print("\n[6/6] Writing")
     for name, df in (("team_logs", team_logs), ("goalie_logs", goalie_logs),
-                     ("skater_logs", skater_logs)):
+                     ("skater_logs", skater_logs), ("shots", shots)):
         df.to_csv(logs_dir / f"{name}.csv", index=False)
     meta = pd.DataFrame([{"day": day, "season": season, "prev_season": prev,
                           "collected_at": datetime.now().isoformat(timespec="seconds"),
                           "games": len(schedule),
                           "games_with_roster": int(dressed["game_id"].nunique()),
-                          "missing_skater_games": len(missing)}])
+                          "missing_skater_games": len(missing),
+                          "shot_games": shot_games, "done_games": len(done_games)}])
     extra = {"meta": meta, "schedule": schedule, "teams": teams, "rosters": rosters,
              "goalie_starts": starters, "availability": avail,
              "team_absences": absences, "dressed": dressed}
@@ -164,7 +175,8 @@ def main() -> int:
     log_run(day, args.run_kind, "collection", status,
             detail=(f"{len(schedule)} games, {len(skater_cur)} skater rows this season, "
                     f"{len(outs)} regulars out, goalies: "
-                    f"{(starters['status'] == 'confirmed').sum()} confirmed / {len(starters)}"),
+                    f"{(starters['status'] == 'confirmed').sum()} confirmed / {len(starters)}, "
+                    f"shot data {shot_games}/{len(done_games)} games"),
             started_at=started)
     print(f"\n{'='*66}\ncollection {status.upper()}")
     return 0

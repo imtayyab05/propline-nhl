@@ -822,11 +822,14 @@ const EXTRA_COLS = {
     ['SOG/G L10', 'sog_pg_recent', num1],
     ['SOG/60', 'shots60', num1],
     ['Opp SOG Allowed (pos)', 'opp_sa_pos', num1],
+    ['Dangerous Shots/G', 'hd_pg', num2],
   ],
   goals: [
     ['Goals L10', 'goals_recent'],
     ['Goals/60', 'goals60', num2],
     ['Sh% (adj)', 'sh_pct', pctF],
+    ['xG/60', 'ixg60', num2],
+    ['Dangerous Shots/G', 'hd_pg', num2],
     ['SOG/G L10', 'sog_pg_recent', num1],
     ['PP TOI', 'pp_toi_recent', mins],
     ['Opp Goalie', 'opp_goalie'],
@@ -842,6 +845,7 @@ const EXTRA_COLS = {
   points: [
     ['Pts/G L10', 'points_pg_recent', num2],
     ['Pts/60', 'points60', num2],
+    ['xG/60', 'ixg60', num2],
     ['PP TOI', 'pp_toi_recent', mins],
     ['Opp GA/G', 'opp_ga', num2],
     ['Opp Goalie', 'opp_goalie'],
@@ -865,6 +869,7 @@ const EXTRA_COLS = {
     ['Home Goalie', 'home_goalie'],
     ['SV%', 'home_goalie_sv', sv3],
     ['Regulars Out', 'missing_names'],
+    ['Combined xG/G', 'combined_xg', num2],
     ['Market Total', 'market_total'],
     ['Over', 'over_price', ml],
     ['Under', 'under_price', ml],
@@ -894,7 +899,9 @@ const EXTRA_COLS = {
   team_goals: [
     ['Opp', 'opponent'],
     ['GF/G', 'gf', num2],
+    ['xGF/G', 'xgf', num2],
     ['Opp GA/G', 'opp_ga', num2],
+    ['Opp xGA/G', 'opp_xga', num2],
     ['Goalie Faced', 'opp_goalie'],
     ['SV%', 'opp_goalie_sv', sv3],
     ['GF/G L10', 'l10_gf', num2],
@@ -944,6 +951,7 @@ const PLAYER_TAIL = [
 // Team tab: season number with its last-10 partner right beside it.
 const TEAM_PAIRS = [
   ['GF/G', 'gf_pg', num2], ['GA/G', 'ga_pg', num2],
+  ['xGF/G', 'xgf_pg', num2], ['xGA/G', 'xga_pg', num2],
   ['SOG/G', 'sf_pg', num1], ['SOG Agst/G', 'sa_pg', num1],
   ['PPG/G', 'ppg_pg', num2], ['PPG Agst/G', 'ppga_pg', num2],
   ['PP%', 'pp_pct', pctF], ['PK%', 'pk_pct', pctF],
@@ -986,8 +994,8 @@ function columnsFor(){
     C('Record', r=>r.points, (v, r)=>r.record || '—'),
     C('Pts%', r=>r.points_pct, v=>pctF(v)),
     ...TEAM_PAIRS.flatMap(([l, k, f]) => [
-      C(l, r=>r[k], v=>f(v)),
-      C(l+' L10', r=>r['l10_'+k], v=>f(v), {cls:'num l10', hcls:'l10'})]),
+      C(l, r=>rawValue(r, k), v=>f(v)),
+      C(l+' L10', r=>rawValue(r, 'l10_'+k), v=>f(v), {cls:'num l10', hcls:'l10'})]),
     C('L10 Record', r=>r.l10_record, null, {cls:'num l10'}),
   ];
 
