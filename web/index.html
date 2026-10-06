@@ -372,9 +372,9 @@
     <div class="card reveal" data-d="3" style="--c:#4ea1ff">
       <div class="n">03</div>
       <h3>Rank, then explain</h3>
-      <p>Shots on goal, points, goals, assists, power-play points and total goals —
-         scored on the numbers, with projected goalies and team power rankings
-         alongside.</p>
+      <p>Player shots, points, goals, assists and power-play points; team and game
+         goals, shots and power-play goals; moneyline and puck line ratings beside the
+         market line — scored on the numbers, with projected goalies alongside.</p>
     </div>
   </div>
 </section>
@@ -464,6 +464,13 @@ const PROPS = [
   {key:'assists',      label:'Assists',       kind:'player'},
   {key:'ppp',          label:'PP Points',     kind:'player'},
   {key:'total_goals',  label:'Total Goals',   kind:'game'},
+  {key:'moneyline',    label:'Moneyline',     kind:'game'},
+  {key:'puck_line',    label:'Puck Line',     kind:'game'},
+  {key:'team_goals',   label:'Team Goals',    kind:'game'},
+  {key:'game_sog',     label:'Game SOG',      kind:'game'},
+  {key:'team_sog',     label:'Team SOG',      kind:'game'},
+  {key:'game_ppg',     label:'Game PPG',      kind:'game'},
+  {key:'team_ppg',     label:'Team PPG',      kind:'game'},
   {key:'team_stats',   label:'Team Stats',    kind:'teams'},
   {key:'goalies',      label:'Goalies',       kind:'goalies'},
   {key:'out',          label:'Out Tonight',   kind:'out'},
@@ -747,6 +754,7 @@ async function loadProp(){
 
 // A game row belongs to both of its teams.
 const rowTeams = r => r.team ? [r.team]
+  : r.details?.team ? [r.details.team]
   : [r.details?.home_team, r.details?.away_team].filter(Boolean);
 
 function buildTeamFilter(){
@@ -791,6 +799,9 @@ const mins = v => { if (v == null) return ''; const s = Math.round(v * 60);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2,'0')}`; };
 const plus = v => v == null || +v === 0 ? '' : `+${(+v).toFixed(1)}`;
 const yesNo = v => v === true ? 'yes' : v === false ? '' : (v ?? '');
+// American odds and puck-line points read with their sign: +135, -1.5
+const ml = v => v == null || v === '' ? '' : (+v > 0 ? `+${+v}` : `${+v}`);
+const signed = v => v == null || v === '' ? '' : (+v > 0 ? `+${+v}` : `${+v}`);
 
 // The pipeline records which slot produced a run. Show it in words — the raw
 // values (scheduled_morning, ...) are for the database, not the header.
@@ -854,6 +865,72 @@ const EXTRA_COLS = {
     ['Home Goalie', 'home_goalie'],
     ['SV%', 'home_goalie_sv', sv3],
     ['Regulars Out', 'missing_names'],
+    ['Market Total', 'market_total'],
+    ['Over', 'over_price', ml],
+    ['Under', 'under_price', ml],
+  ],
+  // Phase 2. Market columns are US-book consensus; SOG and PP-goal boards have none
+  // because no book in the feed offers those markets.
+  moneyline: [
+    ['Stronger Side', 'pick'],
+    ['Edge', 'edge'],
+    ['Its ML', 'pick_ml', ml],
+    ['Other ML', 'dog_ml', ml],
+    ['Market Favourite', 'market_fav'],
+    ['Market Agrees', 'market_agrees'],
+    ['Its Goalie', 'pick_goalie'],
+    ['Other Goalie', 'dog_goalie'],
+    ['Its B2B', 'pick_b2b', yesNo],
+    ['Other B2B', 'dog_b2b', yesNo],
+  ],
+  puck_line: [
+    ['Edge', 'edge'],
+    ['Its GF + Their GA', 'margin_fuel', num2],
+    ['Goalie Faced', 'dog_goalie'],
+    ['Market PL', 'pick_pl_point', signed],
+    ['PL Price', 'pick_pl_price', ml],
+    ['Market Favourite', 'market_fav'],
+  ],
+  team_goals: [
+    ['Opp', 'opponent'],
+    ['GF/G', 'gf', num2],
+    ['Opp GA/G', 'opp_ga', num2],
+    ['Goalie Faced', 'opp_goalie'],
+    ['SV%', 'opp_goalie_sv', sv3],
+    ['GF/G L10', 'l10_gf', num2],
+    ['Market Team Total', 'market_team_total'],
+    ['Over', 'tt_over_price', ml],
+    ['Under', 'tt_under_price', ml],
+    ['Regulars Out', 'missing_names'],
+  ],
+  game_sog: [
+    ['Away SOG/G', 'away_sf', num1],
+    ['Away SOG Agst/G', 'away_sa', num1],
+    ['Home SOG/G', 'home_sf', num1],
+    ['Home SOG Agst/G', 'home_sa', num1],
+  ],
+  team_sog: [
+    ['Opp', 'opponent'],
+    ['SOG/G', 'sf', num1],
+    ['Opp SOG Agst/G', 'opp_sa', num1],
+    ['SOG/G L10', 'l10_sf', num1],
+    ['Opp Agst L10', 'opp_l10_sa', num1],
+    ['Regulars Out', 'missing_names'],
+  ],
+  game_ppg: [
+    ['Away PP%', 'away_pp_pct', pctF],
+    ['Home PP%', 'home_pp_pct', pctF],
+    ['Away Times SH/G', 'home_opp_pen_taken', num2],
+    ['Home Times SH/G', 'away_opp_pen_taken', num2],
+    ['Combined PPG/G', 'ppg_sum', num2],
+  ],
+  team_ppg: [
+    ['Opp', 'opponent'],
+    ['PP%', 'pp_pct', pctF],
+    ['PPG/G', 'ppg', num2],
+    ['Opp Times SH/G', 'opp_pen_taken', num2],
+    ['Opp PK%', 'opp_pk_pct', pctF],
+    ['Opp PPG Agst/G', 'opp_ppga', num2],
   ],
 };
 // Shown on every player board after the prop columns: the add-on, made visible.
@@ -942,11 +1019,15 @@ function columnsFor(){
   const extra = (EXTRA_COLS[current] || []).map(([l, k, f]) => fromKey(l, k, f));
   const rank = C('#', r=>r.rank, null, {cls:'rank', asc:true});
 
-  if (kind === 'game') return [rank,
-    C('Matchup', r=>r.subject, null, {cls:'name'}),
-    score(),
-    C('Goalies (away / home)', r=>r.goalies_status),
-    ...extra, why];
+  if (kind === 'game') {
+    const team = current.startsWith('team_');
+    return [rank,
+      C(team ? 'Team' : current === 'puck_line' ? 'Play' : 'Matchup', r=>r.subject, null,
+        {cls:'name'}),
+      score(),
+      C(team ? 'Goalie Status' : 'Goalies (away / home)', r=>r.goalies_status),
+      ...extra, why];
+  }
 
   return [rank,
     C('Player', r=>r.subject_name, null, {cls:'name'}),

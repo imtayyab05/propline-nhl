@@ -45,6 +45,25 @@ How each is scored (what we told him):
 - Team stats tab replaces what he used MoneyPuck for: goals, SOG, PPG, PP%, points —
   for and against, season and recent side by side — plus a power ranking.
 
+**Delivery plan (Tayyab, 5 Oct):** Devin has NOT been shown Phase 1. Tayyab will deliver
+Phase 1 + Phase 2 together as one Fiverr delivery, before ~21 Oct. Until then, never
+draft client messages that mention the live site or link to it.
+
+**Client decisions and wishes (4 Oct, before seeing anything):**
+- Market lines: GAME LINES ONLY (ML, puck line, total, team totals) on the free Odds
+  tier "until I / we move to a subscription selling service". No player prop lines.
+- His book is Island Luck (islandluck.com). Player props there are MILESTONE yes/no
+  markets: anytime goal (and first goal), 2+/3+ goals, 1+/2+ points, 1+ assists; puck
+  line offered at +-1.5 and +-2.5; totals include OT. Speak in those terms.
+- Ideas he floated, explicitly "not necessarily on this initial make" (NOT in the
+  quoted scope — Tayyab decides whether they are tweaks or a paid add-on):
+  safe vs aggressive SOG threshold per player (usage, PP unit, TOI); 2+ points
+  candidates; hot/cold streaks, head-to-head, DvP, a "pro player"/star-power factor.
+  Shared Titan/Magnus "10,000 simulation" boards (ML/PL/OU) as inspiration. Checked
+  5 Oct against official results for 1-3 Oct: Titan PRIME totals 9/15 while printing
+  88-99.7% win probabilities; Magnus PRIME moneylines 7/14 while printing 53-96%.
+  Their stated probabilities are not calibrated — supports our "rating, never win %".
+
 **Client add-on (30 Sep):** when a starter who plays significant ice time is OUT, bump
 the remaining players who absorb his minutes — especially if he was offensive; it has
 implications at both ends of the ice. Needs injury/scratch data — see open problems.
@@ -69,6 +88,17 @@ implications at both ends of the ice. Needs injury/scratch data — see open pro
   own, not a copy of theirs.
 - Odds: The Odds API, sport key `icehockey_nhl`. NHL has its OWN key on a separate
   Odds account from MLB, so its 500-credit monthly budget is NOT shared.
+  Measured 4 Oct 2026 (docs + 1-credit `/events/{id}/markets` probe, 11 US books):
+  - Free: `/sports`, `/events`. `/odds` (whole slate) = markets x regions per call, so
+    h2h+spreads+totals = 3 per call. `/events/{id}/odds` = markets RETURNED x regions,
+    per game. Empty responses cost 0.
+  - On offer for NHL: h2h, spreads (puck line), totals (11 books), team_totals (5),
+    player_shots_on_goal (3), player_points (2), player_goals (2), player_assists (1),
+    PPP only as an alternate market (1 book). NOT offered at all: game/team SOG totals
+    and game/team PP-goal totals — those Phase 2 props get ratings with no market line.
+  - Budget at ~30 slates / ~220 games a month: game lines 1x/day = 90, 2x/day = 180;
+    team totals 1x/day ~220; each player-prop market 1x/day ~220; all five ~1,000+.
+    Paid plans: 20K credits $30/mo, 100K $59/mo.
 
 ## Data decisions (settled 2 Oct 2026) and what is still open
 
@@ -113,7 +143,13 @@ Still open:
   morning 12:07 with Groq) in pipeline_runs.
 - Client guide + message to Devin when Tayyab is ready.
 - `scripts/healthcheck.py` is still MLB content (not run by the workflow).
-- Phase 2: `propline/odds.py` markets, team/game SOG + PPG props, ML/PL ratings.
+- Phase 2 BUILT 6 Oct (`propline/games.py`, `propline/odds.py`): Moneyline, Puck Line,
+  Team Goals, Game/Team SOG, Game/Team PPG boards + game lines (ML, PL, total, team
+  totals) in table `market_lines` (upserted, never cleared; in-play lines skipped).
+  Odds pulled on morning (`--odds game`, 3 credits) and pregame (`--odds full`, +~1 per
+  game); other runs reuse stored lines. Home ice is MEASURED from last season each run
+  (0.127 strength units on 6 Oct), not guessed. Needs: market_lines SQL run in Supabase
+  and ODDS_API_KEY added as a GitHub secret.
 
 ## Principles carried over from MLB
 

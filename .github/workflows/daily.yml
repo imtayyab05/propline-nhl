@@ -40,9 +40,9 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      # ODDS_API_KEY is Phase 2. When market lines are switched on, add it HERE too —
-      # on MLB it existed as a secret but was missing from this block, and every
-      # scheduled run silently published empty market columns for days.
+      # Wired in deliberately: on MLB this key existed as a secret but was missing from
+      # this block, and every scheduled run silently published empty market columns.
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +87,15 @@ jobs:
             *)           echo "rationale=--no-rationale" >> "$GITHUB_OUTPUT" ;;
           esac
 
+          # Market lines cost credits (free tier, 500/month): game lines on the morning
+          # run, game lines + team totals before games, nothing on the others — those
+          # reuse the stored lines. Budget in propline/odds.py.
+          case "$KIND" in
+            scheduled_morning) echo "odds=game" >> "$GITHUB_OUTPUT" ;;
+            scheduled_pregame) echo "odds=full" >> "$GITHUB_OUTPUT" ;;
+            *)                 echo "odds=none" >> "$GITHUB_OUTPUT" ;;
+          esac
+
           # Last season's logs never change; cache them by season so only the first
           # run of the season pulls them (~30 requests).
           M=$(date -d "$DATE" +%-m); Y=$(date -d "$DATE" +%Y)
@@ -111,4 +120,5 @@ jobs:
           DATE: ${{ steps.cfg.outputs.date }}
           KIND: ${{ steps.cfg.outputs.kind }}
           RATIONALE: ${{ steps.cfg.outputs.rationale }}
-        run: python scripts/process.py --date "$DATE" --run-kind "$KIND" --publish $RATIONALE
+          ODDS: ${{ steps.cfg.outputs.odds }}
+        run: python scripts/process.py --date "$DATE" --run-kind "$KIND" --publish --odds "$ODDS" $RATIONALE

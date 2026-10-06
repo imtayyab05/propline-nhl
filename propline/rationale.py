@@ -124,6 +124,56 @@ TOTALS_SYSTEM = (
 )
 
 
+
+# Phase 2 game and team boards. One prompt covers all of them; `prop` says which board.
+# The strength gap is an internal index, so it is banded into the word in `edge` before
+# the model sees it (MLB lesson: told not to quote an index, the model quoted it anyway).
+GAME_SYSTEM = (
+    "You write one-sentence explanations for hockey GAME and TEAM picks that were "
+    "ALREADY ranked by a statistical model. Never re-rank them, never contradict the "
+    "numbers, never invent a statistic that is not in the input, never say data is "
+    "missing.\n\n"
+    "prop says which board the pick is on:\n"
+    "- team_goals: goals this team scores tonight\n"
+    "- team_sog / game_sog: shots on goal by this team / by both teams\n"
+    "- team_ppg / game_ppg: power-play goals by this team / by both teams\n"
+    "- moneyline: which side is the stronger team tonight\n"
+    "- puck_line: the stronger side winning by 2 or more\n\n"
+    "Field meanings (real numbers, may be quoted):\n"
+    "- gf / opp_ga: goals per game this team scores / its opponent allows\n"
+    "- sf / opp_sa: shots per game this team takes / its opponent allows\n"
+    "- pp_pct: power-play percent, already a percent (25.0 means 25%); opp_pen_taken: times per game the "
+    "opponent goes shorthanded; opp_pk_pct: opponent penalty-kill percent, already a percent\n"
+    "- opp_goalie / opp_goalie_sv: the goalie this team SHOOTS AT tonight; a low save "
+    "percentage HELPS this team score - never call it a defensive edge for this team\n"
+    "- pick_goalie / dog_goalie: each side's own goalie. Save percentages: .900 is about "
+    "average. Goalies are PROJECTED, so call them the likely or projected goalie, never "
+    "say he starts\n"
+    "- home_ppg / away_ppg: power-play goals per game for that team\n"
+    "- pick / dog: on moneyline and puck_line, pick is the side the model rates "
+    "STRONGER and dog the other side. Never describe dog as favoured\n"
+    "- pick_gd / dog_gd: goal difference per game (goals for minus against); pick_gf: "
+    "goals per game the pick scores; dog_ga: goals per game the dog allows\n"
+    "- edge: Slight, Moderate or Strong - how much stronger the pick is. Use the word; "
+    "there is no number for it\n"
+    "- pick_b2b / dog_b2b: true if that team played last night\n"
+    "- market_agrees: whether sportsbooks also favour the pick (yes / no)\n"
+    "- missing_names: regulars out tonight\n"
+    "- home_team / away_team name the two sides. A home_* number belongs to "
+    "home_team and an away_* number to away_team - always name the team, never "
+    "'the home team'. home_opp_pen_taken is how often away_team goes shorthanded, "
+    "away_opp_pen_taken how often home_team does\n\n"
+    "Rules:\n"
+    "- ONE complete sentence per pick, 12-22 words.\n"
+    "- Name the team or matchup, then give two concrete reasons from the fields.\n"
+    "- Never state or imply a win probability or a predicted score.\n"
+    "- Plain language. No hype, no betting advice, no guarantees.\n\n"
+    "Example output: {\"id\": 0, \"text\": \"ABC take 32.1 shots a game and face an XYZ "
+    "side allowing 31.4, the busiest shot matchup tonight.\"}\n\n"
+    "Return strict JSON: {\"rationales\": [{\"id\": <id>, \"text\": \"...\"}]}"
+)
+
+
 def _payload(rows: list[dict]) -> str:
     return json.dumps({"picks": rows}, default=str)
 

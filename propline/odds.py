@@ -1,33 +1,34 @@
-"""Sportsbook lines — game totals, team totals, and pitcher strikeout props.
+"""Market lines for the game boards — moneyline, puck line, total, team totals.
 
-The client wants the model's grade shown next to the market's number, so he can see
-where they disagree rather than reading a score in isolation.
+Client decision (4 Oct 2026): GAME LINES ONLY, on The Odds API's free 500 credits a
+month, "until we move to a subscription selling service". No player prop lines.
 
 CREDIT BUDGET — read before changing anything here
 --------------------------------------------------
-The Odds API's free tier is 500 credits a month, and the two market families cost
-wildly different amounts:
+Measured against the live API and its docs on 4 Oct 2026:
+  /sports, /events            free
+  /odds h2h,spreads,totals    3 credits, the whole slate in one call
+  /events/{id}/odds team_totals   1 credit PER GAME (only markets returned are charged;
+                                   an empty response costs nothing)
+Plan: game lines on the morning and pre-game runs (2 x 3 x ~30 days = ~180), team
+totals on the pre-game run only (~7 games x ~30 days = ~210). ~390 a month, under 500
+with room for a few manual pulls. Every other run reuses the lines stored in Supabase
+(table market_lines), so they never cost a credit.
 
-  totals / team totals   one call covers the whole slate      ~1-2 credits
-  pitcher strikeouts     a per-EVENT endpoint, so 15 games    ~15 credits
+The budget is checked (free call) before spending, and a run that would dip under
+RESERVE skips the pull and says so — the key must never die silently mid-month.
 
-At one pull a day that is roughly 480 credits a month — inside the free tier, but
-with almost no headroom. At three pulls a day it is ~1,350 and the key dies in the
-second week, silently, mid-slate.
-
-So odds are fetched ONCE per slate and cached to disk. Later runs of the same day
-reuse the file. If the cache is present this module makes no requests at all, which
-is what keeps five scheduled runs a day affordable.
+Consensus: the median price across US books at the most-quoted line. One book can be
+stale or shaded; the client compares our rating against "the market", not one book.
+His own book (Island Luck, Bahamas) is not in this feed, so these are a reference.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import unicodedata
-import time
+from collections import Counter
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pandas as pd
 import requests
@@ -36,41 +37,11 @@ BASE = "https://api.the-odds-api.com/v4"
 SPORT = "icehockey_nhl"
 REGION = "us"
 TIMEOUT = 45
+GAME_MARKETS = "h2h,spreads,totals"
+RESERVE = 40          # never spend below this many credits left this month
 
-# Bookmaker-agnostic: the median across books is steadier than any single one, which
-# can be stale or shaded. Devin compares the model against "the market", not against
-# one book's number.
-# Slate-wide markets: one call returns every game, so this is almost free.
-#
-# ONLY "totals" works here. The betting-markets documentation lists team_totals
-# alongside it as a featured market, but the slate endpoint rejects it with
-# INVALID_MARKET — team totals are per-event, and therefore cost per game like a
-# player prop. Verified against the live API, which returns 422 at no credit cost.
-SLATE_MARKETS = "totals"
-
-# Player props live on a per-EVENT endpoint and are charged per market per event.
-# Every category the client scores has a market key, so the full set is listed here —
-# but pulling all six across a 15-game slate is ~90 credits a day, or 2,700 a month
-# against a 500-credit free tier. PROP_MARKETS is therefore what we ACTUALLY request,
-# and it is deliberately just the strikeout line: it is the category he already rates
-# highest, and it is the one his spec asked for by name.
-AVAILABLE_PROP_MARKETS = {
-    "strikeouts": "pitcher_strikeouts",
-    "hits": "batter_hits",
-    "total_bases": "batter_total_bases",
-    "home_runs": "batter_home_runs",
-    "rbis": "batter_rbis",
-    "runs": "batter_runs_scored",
-}
-# team_totals sits here rather than in SLATE_MARKETS for the reason above. Adding it
-# doubles the per-event cost, so it is off by default; the client gets game totals
-# free and can turn team totals on if he decides they are worth the credits.
-PROP_MARKETS = ["pitcher_strikeouts"]
-
-# Rough credit cost, so a change here is a deliberate decision rather than a surprise
-# invoice: one slate call, plus one per game per prop market.
-def estimate_credits(games: int, markets: list[str] | None = None) -> int:
-    return 2 + games * len(markets if markets is not None else PROP_MARKETS)
+LINE_COLS = ["game_id", "market", "subject", "side", "point", "price", "books",
+             "fetched_at"]
 
 
 class OddsError(RuntimeError):
@@ -92,207 +63,222 @@ def _get(path: str, **params):
     if r.status_code == 429:
         raise OddsError("odds API quota exhausted for this key")
     r.raise_for_status()
-    # every response carries the running budget; worth surfacing rather than guessing
     left = r.headers.get("x-requests-remaining")
-    used = r.headers.get("x-requests-used")
-    return r.json(), (left, used)
+    return r.json(), (int(float(left)) if left not in (None, "") else None)
 
 
-def fetch_slate_odds(slate_date, cache_dir, force: bool = False) -> dict:
-    """Everything we need for one slate, fetched once and cached.
+def credits_left() -> int | None:
+    """Free call: the /sports endpoint does not count against the quota."""
+    _, left = _get("/sports")
+    return left
 
-    Returns {"totals": [...], "strikeouts": [...], "fetched_at": ..., "credits": ...}.
+
+# --- names and prices ----------------------------------------------------------------
+
+def norm_name(n) -> str:
+    """'St Louis Blues' and 'St. Louis Blues', 'Montreal' and 'Montréal' match."""
+    s = unicodedata.normalize("NFKD", str(n)).encode("ascii", "ignore").decode()
+    return " ".join(s.replace(".", " ").lower().split())
+
+
+def _to_dec(a: float) -> float:
+    return 1 + a / 100 if a > 0 else 1 + 100 / abs(a)
+
+
+def _to_american(d: float) -> int:
+    return int(round((d - 1) * 100)) if d >= 2 else int(round(-100 / (d - 1)))
+
+
+def _median_price(prices: list[float]) -> int | None:
+    """Median in decimal odds, back to American. A plain median of American prices
+    misbehaves across the -100/+100 boundary (-110 and +110 'average' to 0)."""
+    if not prices:
+        return None
+    dec = sorted(_to_dec(p) for p in prices)
+    mid = len(dec) // 2
+    m = dec[mid] if len(dec) % 2 else (dec[mid - 1] + dec[mid]) / 2
+    return _to_american(m)
+
+
+# --- fetch ------------------------------------------------------------------------------
+
+def fetch(mode: str, schedule: pd.DataFrame, teams: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """Pull lines for tonight's games. mode: 'game' (3 credits) or 'full' (+team totals).
+
+    Returns (lines in long form, a one-line note for the run log).
     """
-    cache = Path(cache_dir) / "odds.json"
-    if cache.exists() and not force:
-        with open(cache, encoding="utf-8") as fh:
-            data = json.load(fh)
-        print(f"  ok    odds: reusing today's cache ({len(data.get('totals', []))} games)")
-        return data
+    if schedule.empty:
+        return pd.DataFrame(columns=LINE_COLS), "no games"
+    left = credits_left()
+    need = 3 + (len(schedule) if mode == "full" else 0)
+    if left is not None and left - 3 < RESERVE:
+        return pd.DataFrame(columns=LINE_COLS), f"SKIPPED: only {left} credits left"
+    if left is not None and left - need < RESERVE:
+        mode = "game"          # keep the cheap pull, drop the per-game one
 
-    out = {"totals": [], "strikeouts": [], "fetched_at":
-           datetime.now(timezone.utc).isoformat(), "credits": {}}
+    events, left = _get(f"/sports/{SPORT}/odds", regions=REGION, markets=GAME_MARKETS,
+                        oddsFormat="american")
+    by_name = {norm_name(n): a for n, a in zip(teams["team_name"], teams["abbrev"])}
+    games = {(r.home_team, r.away_team): r.game_id for r in schedule.itertuples()}
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")   # API format
 
-    # --- game and team totals: one call for the whole slate ----------------------
-    events, budget = _get(f"/sports/{SPORT}/odds", regions=REGION,
-                          markets=SLATE_MARKETS, oddsFormat="american")
-    out["totals"] = events
-    out["credits"]["after_totals"] = budget[0]
-
-    # --- strikeout props: one call PER EVENT, the expensive half -----------------
-    # Only for games that have actually started listing props; a request for an event
-    # with no prop market still costs a credit, so failures are counted and reported
-    # rather than retried.
-    # Player props only exist for games that have not started. Requesting them for a
-    # game already under way returns nothing AND still costs a credit, so the filter
-    # here is a saving, not just tidiness: on a slate that is half played it halves
-    # the expensive half of the bill.
-    now = datetime.now(timezone.utc)
-    upcoming = []
+    rows, matched, live = [], {}, 0
     for ev in events:
-        try:
-            start = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
-        except (KeyError, ValueError):
-            upcoming.append(ev)
+        # /odds also serves IN-PLAY lines for games already under way (a 4.5 total on a
+        # game that opened at 6.5, seen 4 Oct 2026). Those are not the pre-game market
+        # our rating is set against, so started games keep the line stored earlier.
+        if ev.get("commence_time", "") <= now:
+            live += 1
             continue
-        if start > now:
-            upcoming.append(ev)
-    skipped = len(events) - len(upcoming)
+        h, a = by_name.get(norm_name(ev["home_team"])), by_name.get(norm_name(ev["away_team"]))
+        gid = games.get((h, a))
+        if gid is None:
+            continue           # another day's game, or a name we cannot map
+        matched[gid] = ev["id"]
+        name_to_abbr = {ev["home_team"]: h, ev["away_team"]: a}
+        rows += _game_rows(gid, ev, name_to_abbr, now)
 
-    misses = 0
-    for ev in upcoming:
-        try:
-            detail, budget = _get(f"/sports/{SPORT}/events/{ev['id']}/odds",
-                                  regions=REGION, markets=",".join(PROP_MARKETS),
-                                  oddsFormat="american")
-            out["strikeouts"].append(detail)
-        except Exception:  # noqa: BLE001 — one missing market must not lose the rest
-            misses += 1
-        time.sleep(0.3)
-    out["credits"]["remaining"] = budget[0]
+    note = f"game lines for {len(matched)}/{len(schedule)} games"
+    if live:
+        note += f" ({live} already started, kept earlier lines)"
+    if mode == "full":
+        tt = 0
+        for gid, ev_id in matched.items():
+            ev, left = _get(f"/sports/{SPORT}/events/{ev_id}/odds", regions=REGION,
+                            markets="team_totals", oddsFormat="american")
+            h, a = schedule.loc[schedule.game_id == gid, ["home_team", "away_team"]].iloc[0]
+            got = _team_total_rows(gid, ev, {ev.get("home_team"): h, ev.get("away_team"): a}, now)
+            tt += bool(got)
+            rows += got
+        note += f", team totals for {tt}"
+    note += f"; {left} credits left"
+    return pd.DataFrame(rows, columns=LINE_COLS), note
 
-    Path(cache_dir).mkdir(parents=True, exist_ok=True)
-    with open(cache, "w", encoding="utf-8") as fh:
-        json.dump(out, fh)
 
-    print(f"  ok    odds: {len(out['totals'])} games, "
-          f"{len(out['strikeouts'])} with strikeout props"
-          + (f", {misses} without" if misses else "")
-          + (f", {skipped} already started" if skipped else "")
-          + f" | credits left: {out['credits'].get('remaining')}")
+def _game_rows(gid, ev, name_to_abbr, now) -> list[dict]:
+    ml, sp, tot = {}, [], []
+    books = ev.get("bookmakers", [])
+    for b in books:
+        for m in b["markets"]:
+            if m["key"] == "h2h":
+                for o in m["outcomes"]:
+                    ml.setdefault(name_to_abbr.get(o["name"]), []).append(o["price"])
+            elif m["key"] == "spreads":
+                sp.append({name_to_abbr.get(o["name"]): (o.get("point"), o["price"])
+                           for o in m["outcomes"]})
+            elif m["key"] == "totals":
+                tot.append({o["name"].lower(): (o.get("point"), o["price"])
+                            for o in m["outcomes"]})
+    out = []
+    for team, prices in ml.items():
+        if team:
+            out.append(dict(game_id=gid, market="moneyline", subject=team, side="",
+                            point=None, price=_median_price(prices), books=len(prices),
+                            fetched_at=now))
+    out += _consensus(gid, "puck_line", sp, now)
+    out += _consensus(gid, "total", tot, now)
     return out
 
 
-# --- shaping -------------------------------------------------------------------
-
-def _median(values: list[float]) -> float | None:
-    vals = sorted(v for v in values if v is not None)
-    if not vals:
-        return None
-    mid = len(vals) // 2
-    return vals[mid] if len(vals) % 2 else round((vals[mid - 1] + vals[mid]) / 2, 2)
-
-
-def game_totals(raw: dict) -> pd.DataFrame:
-    """Median over/under line per game, with the two team names to join on."""
+def _consensus(gid, market, per_book: list[dict], now) -> list[dict]:
+    """Most-quoted line, median price at that line, for each side."""
+    if not per_book:
+        return []
+    sides = sorted({k for d in per_book for k in d if k})
+    first = sides[0]
+    pts = Counter(d[first][0] for d in per_book if first in d and d[first][0] is not None)
+    if not pts:
+        return []
+    main = pts.most_common(1)[0][0]
+    at_main = [d for d in per_book if first in d and d[first][0] == main]
     rows = []
-    for ev in raw.get("totals", []):
-        points = []
-        for bk in ev.get("bookmakers", []):
-            for mk in bk.get("markets", []):
-                if mk.get("key") != "totals":
-                    continue
-                for oc in mk.get("outcomes", []):
-                    if oc.get("point") is not None:
-                        points.append(float(oc["point"]))
-        if not points:
+    for s in sides:
+        prices = [d[s][1] for d in at_main if s in d]
+        point = next((d[s][0] for d in at_main if s in d), None)
+        subject, side = (s, "") if market == "puck_line" else ("game", s)
+        rows.append(dict(game_id=gid, market=market, subject=subject, side=side,
+                         point=point, price=_median_price(prices), books=len(prices),
+                         fetched_at=now))
+    return rows
+
+
+def _team_total_rows(gid, ev, name_to_abbr, now) -> list[dict]:
+    per_team: dict[str, list[dict]] = {}
+    for b in ev.get("bookmakers", []):
+        for m in b["markets"]:
+            if m["key"] != "team_totals":
+                continue
+            book: dict[str, dict] = {}
+            for o in m["outcomes"]:
+                t = name_to_abbr.get(o.get("description"))
+                if t:
+                    book.setdefault(t, {})[o["name"].lower()] = (o.get("point"), o["price"])
+            for t, d in book.items():
+                per_team.setdefault(t, []).append(d)
+    rows = []
+    for t, lst in per_team.items():
+        for r in _consensus(gid, "team_total", lst, now):
+            rows.append({**r, "subject": t})
+    return rows
+
+
+# --- attach to boards -----------------------------------------------------------------
+
+def _pick(lines: pd.DataFrame, gid, market, subject=None, side=None):
+    m = lines[(lines.game_id == gid) & (lines.market == market)]
+    if subject is not None:
+        m = m[m.subject == subject]
+    if side is not None:
+        m = m[m.side == side]
+    return m.iloc[0] if len(m) else None
+
+
+def attach(boards: dict[str, pd.DataFrame], totals: pd.DataFrame,
+           lines: pd.DataFrame) -> tuple[dict[str, pd.DataFrame], pd.DataFrame]:
+    """Put the market's number beside our rating on each board that has a market."""
+    if lines is None or lines.empty:
+        return boards, totals
+    lines = lines.copy()
+    lines["game_id"] = pd.to_numeric(lines["game_id"]).astype("int64")
+
+    if totals is not None and not totals.empty:
+        t = totals.copy()
+        ov = [_pick(lines, g, "total", side="over") for g in t.game_id]
+        un = [_pick(lines, g, "total", side="under") for g in t.game_id]
+        t["market_total"] = [o["point"] if o is not None else None for o in ov]
+        t["over_price"] = [o["price"] if o is not None else None for o in ov]
+        t["under_price"] = [u["price"] if u is not None else None for u in un]
+        totals = t
+
+    if "team_goals" in boards:
+        b = boards["team_goals"].copy()
+        ov = [_pick(lines, g, "team_total", s, "over") for g, s in zip(b.game_id, b.team)]
+        un = [_pick(lines, g, "team_total", s, "under") for g, s in zip(b.game_id, b.team)]
+        b["market_team_total"] = [o["point"] if o is not None else None for o in ov]
+        b["tt_over_price"] = [o["price"] if o is not None else None for o in ov]
+        b["tt_under_price"] = [u["price"] if u is not None else None for u in un]
+        boards["team_goals"] = b
+
+    for key in ("moneyline", "puck_line"):
+        if key not in boards:
             continue
-        rows.append({
-            "odds_event_id": ev.get("id"),
-            "home_team": ev.get("home_team"),
-            "away_team": ev.get("away_team"),
-            "commence_time": ev.get("commence_time"),
-            "vegas_total": _median(points),
-            "books": len(ev.get("bookmakers", [])),
-        })
-    return pd.DataFrame(rows)
-
-
-def strikeout_lines(raw: dict) -> pd.DataFrame:
-    """Median strikeout line per pitcher."""
-    rows = []
-    for ev in raw.get("strikeouts", []):
-        for bk in ev.get("bookmakers", []):
-            for mk in bk.get("markets", []):
-                if mk.get("key") != "pitcher_strikeouts":
-                    continue
-                for oc in mk.get("outcomes", []):
-                    if oc.get("point") is None:
-                        continue
-                    rows.append({
-                        "pitcher_name": oc.get("description") or oc.get("name"),
-                        "line": float(oc["point"]),
-                        "odds_event_id": ev.get("id"),
-                    })
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    return (df.groupby(["pitcher_name", "odds_event_id"], as_index=False)
-              .agg(vegas_k_line=("line", lambda s: _median(list(s))),
-                   books=("line", "size")))
-
-
-def _norm_name(n) -> str:
-    """Fold a name for matching: strip accents, punctuation and case.
-
-    The odds feed writes "Cristopher Sanchez" where the MLB API writes
-    "Cristopher Sánchez". Exact matching drops those silently, which would look like
-    a missing line rather than a spelling difference.
-    """
-    if not isinstance(n, str):
-        return ""
-    stripped = "".join(c for c in unicodedata.normalize("NFKD", n)
-                       if not unicodedata.combining(c))
-    return stripped.lower().replace(".", "").replace("'", "").replace("-", " ").strip()
-
-
-def attach_game_totals(schedule: pd.DataFrame, totals: pd.DataFrame) -> pd.DataFrame:
-    """Map each odds event to a game_pk on this slate.
-
-    Joined on the two team names, which match the MLB API exactly — no fuzzy logic
-    needed. The odds feed covers a wider date window than one slate, so anything that
-    does not match a scheduled game today is simply a different day's fixture and is
-    dropped rather than force-fitted.
-    """
-    if schedule.empty or totals.empty:
-        return pd.DataFrame()
-
-    sched = schedule[["game_pk", "home_team", "away_team"]].copy()
-    sched["_h"] = sched["home_team"].map(_norm_name)
-    sched["_a"] = sched["away_team"].map(_norm_name)
-
-    t = totals.copy()
-    t["_h"] = t["home_team"].map(_norm_name)
-    t["_a"] = t["away_team"].map(_norm_name)
-
-    out = sched.merge(t.drop(columns=["home_team", "away_team"]),
-                      on=["_h", "_a"], how="inner")
-
-    # Doubleheaders break a team-name join: two games between the same two teams on
-    # the same day produce a cartesian match, and the board silently gains duplicate
-    # rows with different totals. Disambiguate on first pitch — keep, for each
-    # scheduled game, the odds event that starts closest to it.
-    if "game_time_utc" in schedule.columns and "commence_time" in out.columns:
-        times = schedule[["game_pk", "game_time_utc"]]
-        out = out.merge(times, on="game_pk", how="left")
-        start = pd.to_datetime(out["game_time_utc"], utc=True, errors="coerce")
-        book = pd.to_datetime(out["commence_time"], utc=True, errors="coerce")
-        out["_gap"] = (start - book).abs()
-        out = (out.sort_values("_gap")
-                  .drop_duplicates("game_pk", keep="first")
-                  .drop_duplicates("odds_event_id", keep="first")
-                  .drop(columns=["_gap", "game_time_utc"]))
-
-    return out.drop(columns=["_h", "_a"])
-
-
-def attach_strikeout_lines(schedule: pd.DataFrame, lines: pd.DataFrame) -> pd.DataFrame:
-    """Map each pitcher's market line to the probable starter he is."""
-    if schedule.empty or lines.empty:
-        return pd.DataFrame()
-
-    probables = []
-    for _, g in schedule.iterrows():
-        for side in ("home", "away"):
-            pid, name = g.get(f"{side}_probable_id"), g.get(f"{side}_probable")
-            if pd.notna(pid) and isinstance(name, str):
-                probables.append({"player_id": int(pid), "_n": _norm_name(name)})
-    if not probables:
-        return pd.DataFrame()
-
-    p = pd.DataFrame(probables).drop_duplicates("player_id")
-    l = lines.copy()
-    l["_n"] = l["pitcher_name"].map(_norm_name)
-    out = p.merge(l, on="_n", how="inner")
-    return out.drop(columns=["_n"])
+        b = boards[key].copy()
+        pm = [_pick(lines, g, "moneyline", p) for g, p in zip(b.game_id, b.pick)]
+        dm = [_pick(lines, g, "moneyline", d) for g, d in zip(b.game_id, b.dog)]
+        b["pick_ml"] = [r["price"] if r is not None else None for r in pm]
+        b["dog_ml"] = [r["price"] if r is not None else None for r in dm]
+        # the market's favourite is the side with the shorter price
+        fav = []
+        for p, d, pick, dog in zip(b["pick_ml"], b["dog_ml"], b["pick"], b["dog"]):
+            if p is None or d is None or p != p or d != d:
+                fav.append(None)
+            else:
+                fav.append(pick if _to_dec(p) < _to_dec(d) else dog)
+        b["market_fav"] = fav
+        b["market_agrees"] = [None if f is None else ("yes" if f == p else "no")
+                              for f, p in zip(fav, b["pick"])]
+        pl = [_pick(lines, g, "puck_line", p) for g, p in zip(b.game_id, b.pick)]
+        b["pick_pl_point"] = [r["point"] if r is not None else None for r in pl]
+        b["pick_pl_price"] = [r["price"] if r is not None else None for r in pl]
+        boards[key] = b
+    return boards, totals

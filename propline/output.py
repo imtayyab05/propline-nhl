@@ -86,8 +86,54 @@ TOTAL_GOALS_COLS = [
     ("goalies_status", "Goalies (away / home)"),
     ("combined_pp_threat", "PP Threat Index"),
     ("missing_names", "Regulars Out"),
+    ("market_total", "Market Total"), ("over_price", "Over"), ("under_price", "Under"),
     ("rationale", "Why"),
 ]
+
+# Phase 2 boards. Market columns are US-book consensus lines (propline/odds.py); a blank
+# means no line yet, or a market no book offers (SOG and PP-goal totals never have one).
+BOARD_SHEETS = {
+    "moneyline": ("Moneyline", [
+        ("rank", "#"), ("matchup", "Matchup"), ("pick", "Stronger Side"),
+        ("edge", "Edge"), ("score", "Score"), ("pick_ml", "Its ML"),
+        ("dog_ml", "Other ML"), ("market_fav", "Market Favourite"),
+        ("market_agrees", "Market Agrees"), ("pick_goalie", "Its Goalie"),
+        ("dog_goalie", "Other Goalie"), ("pick_b2b", "Its B2B"), ("dog_b2b", "Other B2B"),
+        ("rationale", "Why")]),
+    "puck_line": ("Puck Line", [
+        ("rank", "#"), ("subject", "Play"), ("matchup", "Matchup"), ("edge", "Edge"),
+        ("score", "Score"), ("margin_fuel", "Its GF + Their GA"),
+        ("dog_goalie", "Goalie Faced"), ("pick_pl_point", "Market PL"),
+        ("pick_pl_price", "PL Price"), ("market_fav", "Market Favourite"),
+        ("rationale", "Why")]),
+    "team_goals": ("Team Goals", [
+        ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
+        ("gf", "GF/G"), ("opp_ga", "Opp GA/G"), ("opp_goalie", "Goalie Faced"),
+        ("opp_goalie_sv", "Its SV% (adj)"), ("l10_gf", "GF/G L10"),
+        ("market_team_total", "Market Team Total"), ("tt_over_price", "Over"),
+        ("tt_under_price", "Under"), ("missing_names", "Regulars Out"),
+        ("rationale", "Why")]),
+    "team_sog": ("Team SOG", [
+        ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
+        ("sf", "SOG/G"), ("opp_sa", "Opp SOG Agst/G"), ("l10_sf", "SOG/G L10"),
+        ("opp_l10_sa", "Opp SOG Agst/G L10"), ("missing_names", "Regulars Out"),
+        ("rationale", "Why")]),
+    "game_sog": ("Game SOG", [
+        ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
+        ("away_sf", "Away SOG/G"), ("away_sa", "Away SOG Agst/G"),
+        ("home_sf", "Home SOG/G"), ("home_sa", "Home SOG Agst/G"),
+        ("rationale", "Why")]),
+    "team_ppg": ("Team PPG", [
+        ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
+        ("pp_pct", "PP%"), ("ppg", "PPG/G"), ("opp_pen_taken", "Opp Times SH/G"),
+        ("opp_pk_pct", "Opp PK%"), ("opp_ppga", "Opp PPG Agst/G"), ("rationale", "Why")]),
+    "game_ppg": ("Game PPG", [
+        ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
+        ("away_pp_pct", "Away PP%"), ("home_pp_pct", "Home PP%"),
+        ("home_opp_pen_taken", "Away Times SH/G"),
+        ("away_opp_pen_taken", "Home Times SH/G"), ("ppg_sum", "Combined PPG/G"),
+        ("rationale", "Why")]),
+}
 
 TEAM_COLS = [
     ("power_rank", "Power #"), ("team", "Team"), ("power_score", "Power Score"),
@@ -133,7 +179,8 @@ def _shape(df: pd.DataFrame, spec, top_n=None) -> pd.DataFrame:
 
 
 def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
-                         out_path, run_meta: dict, top_n: int | None = None) -> Path:
+                         out_path, run_meta: dict, top_n: int | None = None,
+                         game_boards: dict | None = None) -> Path:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -151,7 +198,10 @@ def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
                 xl, sheet_name=title, index=False)
 
         # slate-wide tabs are never truncated
-        for frame, spec, title in ((total_goals, TOTAL_GOALS_COLS, "Total Goals"),
+        boards = [(total_goals, TOTAL_GOALS_COLS, "Total Goals")]
+        for prop, (title, spec) in BOARD_SHEETS.items():
+            boards.append(((game_boards or {}).get(prop), spec, title))
+        for frame, spec, title in (*boards,
                                    (team_tbl, TEAM_COLS, "Team Stats"),
                                    (starters, GOALIE_COLS, "Goalies"),
                                    (outs, OUT_COLS, "Out Tonight")):

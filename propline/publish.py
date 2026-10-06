@@ -28,7 +28,29 @@ COMMON_DETAIL = ["position", "recent_games", "gp_season", "toi_recent", "toi_bum
 GAME_DETAIL = ["home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg",
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
                "away_goalie_sv", "goalies_lean", "combined_pp_threat",
-               "missing_regulars", "missing_names"]
+               "missing_regulars", "missing_names", "market_total", "over_price",
+               "under_price"]
+
+# Phase 2 boards. Team boards carry `team` so the dashboard's team filter finds them;
+# every board carries home_team / away_team for the same reason.
+BOARD_DETAIL = {
+    "team_goals": ["team", "opponent", "gf", "opp_ga", "opp_goalie", "opp_goalie_sv",
+                   "pp_threat", "l10_gf", "missing_names", "market_team_total",
+                   "tt_over_price", "tt_under_price"],
+    "team_sog": ["team", "opponent", "sf", "opp_sa", "l10_sf", "opp_l10_sa",
+                 "missing_names"],
+    "team_ppg": ["team", "opponent", "ppg", "pp_pct", "opp_pen_taken", "opp_pk_pct",
+                 "opp_ppga"],
+    "game_sog": ["pace", "l10_pace", "home_sf", "away_sf", "home_sa", "away_sa"],
+    "game_ppg": ["pp_threat_sum", "ppg_sum", "ppga_sum", "home_pp_pct", "away_pp_pct",
+                 "home_opp_pen_taken", "away_opp_pen_taken"],
+    "moneyline": ["pick", "dog", "edge", "gap", "pick_goalie", "dog_goalie", "pick_b2b",
+                  "dog_b2b", "home_missing_names", "away_missing_names", "pick_ml",
+                  "dog_ml", "market_fav", "market_agrees"],
+    "puck_line": ["pick", "dog", "edge", "gap", "margin_fuel", "dog_goalie", "pick_ml",
+                  "market_fav", "pick_pl_point", "pick_pl_price"],
+}
+BOARD_COMMON = ["home_team", "away_team"]
 
 TEAM_COLS = ["team_id", "team", "team_name", "power_rank", "power_score", "gp", "record",
              "points", "points_pct", "gf_pg", "ga_pg", "sf_pg", "sa_pg", "ppg_pg",
@@ -43,7 +65,7 @@ TEAM_DETAIL = ["gf_pg_b", "ga_pg_b", "sf_pg_b", "sa_pg_b", "pp_pct_b", "pk_pct_b
 INT_COLS = {
     "game_id", "team_id", "home_team_id", "away_team_id", "player_id", "subject_id",
     "goalie_id", "backup_id", "rank", "power_rank", "gp", "l10_gp", "points",
-    "starts_recent", "games_missed", "game_type",
+    "starts_recent", "games_missed", "game_type", "price", "books",
 }
 
 
@@ -101,8 +123,45 @@ def _snapshot(table: str, df: pd.DataFrame, filters: dict, on_conflict: str) -> 
     return upsert(table, df, on_conflict=on_conflict)
 
 
+def publish_lines(slate_date, lines: pd.DataFrame) -> int:
+    """Upsert market lines. Never cleared: a game that has started keeps the last
+    pre-game line it had, because in-play lines are not fetched (see odds.fetch)."""
+    if lines is None or lines.empty:
+        return 0
+    rows = lines.copy()
+    rows.insert(0, "slate_date", str(slate_date))
+    rows = _ints(rows)
+    check_json(rows)
+    return upsert("market_lines", rows,
+                  on_conflict="slate_date,game_id,market,subject,side")
+
+
+def read_lines(slate_date) -> pd.DataFrame:
+    rows = read("market_lines", {"select": "*", "slate_date": f"eq.{slate_date}",
+                                 "limit": "5000"})
+    return pd.DataFrame(rows)
+
+
+def _board_rows(day: str, prop: str, g: pd.DataFrame) -> pd.DataFrame:
+    if prop in ("team_goals", "team_sog", "team_ppg"):
+        subject, status = g["team"], g["opp_goalie_status"]
+    elif prop == "puck_line":
+        subject = g["subject"]
+        status = g["away_goalie_status"].astype(str) + " / " + g["home_goalie_status"].astype(str)
+    else:
+        subject = g["matchup"]
+        status = g["away_goalie_status"].astype(str) + " / " + g["home_goalie_status"].astype(str)
+    return pd.DataFrame({
+        "slate_date": day, "game_id": g["game_id"], "prop": prop, "subject": subject,
+        "rank": g["rank"], "score": g["score"], "goalies_status": status,
+        "rationale": g.get("rationale"),
+        "details": _details(g, BOARD_DETAIL[prop] + BOARD_COMMON),
+    })
+
+
 def publish_slate(slate_date, schedule, starters, avail, player_scores, total_goals,
-                  team_tbl, top_n: int | None = None) -> dict[str, int]:
+                  team_tbl, top_n: int | None = None,
+                  game_boards: dict | None = None) -> dict[str, int]:
     """Write the whole slate. Returns rows written per table.
 
     top_n=None publishes every scored row: the dashboard can only filter what it has
@@ -160,15 +219,21 @@ def publish_slate(slate_date, schedule, starters, avail, player_scores, total_go
         written["prop_picks"] = _snapshot("prop_picks", allp, {"slate_date": f"eq.{day}"},
                                           "slate_date,prop,subject_id")
 
+    frames = []
     if total_goals is not None and not total_goals.empty:
         g = total_goals.copy()
-        rows = pd.DataFrame({
+        frames.append(pd.DataFrame({
             "slate_date": day, "game_id": g["game_id"], "prop": "total_goals",
             "subject": g["matchup"], "rank": g["rank"], "score": g["score"],
             "goalies_status": g["goalies_status"], "rationale": g.get("rationale"),
             "details": _details(g, GAME_DETAIL),
-        })
-        rows = _keep_rationale("game_picks", rows, day, ["prop", "game_id"])
+        }))
+    for prop, g in (game_boards or {}).items():
+        if g is not None and not g.empty:
+            frames.append(_board_rows(day, prop, g))
+    if frames:
+        rows = pd.concat(frames, ignore_index=True)
+        rows = _keep_rationale("game_picks", rows, day, ["prop", "game_id", "subject"])
         written["game_picks"] = _snapshot("game_picks", rows, {"slate_date": f"eq.{day}"},
                                           "slate_date,prop,game_id,subject")
 

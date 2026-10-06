@@ -131,6 +131,25 @@ create table if not exists team_stats (
     primary key (slate_date, team_id)
 );
 
+-- Market lines for the game boards (Phase 2): moneyline, puck line, total, team totals.
+-- Consensus across US books (median price at the most-quoted line). Rows are UPSERTED,
+-- never cleared, so a game that has started keeps its last pre-game line.
+-- market: moneyline | puck_line | total | team_total
+-- subject: team abbreviation, or 'game' for the game total. side: over | under | ''.
+create table if not exists market_lines (
+    slate_date   date not null,
+    game_id      bigint not null,
+    market       text not null,
+    subject      text not null,
+    side         text not null default '',
+    point        numeric,
+    price        int,                         -- American odds
+    books        int,
+    fetched_at   timestamptz,
+    primary key (slate_date, game_id, market, subject, side)
+);
+create index if not exists market_lines_date_idx on market_lines (slate_date);
+
 -- ============================================================ run log
 
 create table if not exists pipeline_runs (
@@ -158,7 +177,8 @@ do $$
 declare t text;
 begin
   foreach t in array array['players','games','goalie_starts','player_status',
-                           'prop_picks','game_picks','team_stats','pipeline_runs']
+                           'prop_picks','game_picks','team_stats','market_lines',
+                           'pipeline_runs']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('grant select, insert, update, delete on %I to service_role', t);
