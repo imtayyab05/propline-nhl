@@ -142,7 +142,6 @@ Still open:
 - Watch the first scheduled runs (midday 17:37, pregame 22:37 with Groq, late 01:37,
   morning 12:07 with Groq) in pipeline_runs.
 - Client guide + message to Devin when Tayyab is ready.
-- `scripts/healthcheck.py` is still MLB content (not run by the workflow).
 - Phase 2 BUILT 6 Oct (`propline/games.py`, `propline/odds.py`): Moneyline, Puck Line,
   Team Goals, Game/Team SOG, Game/Team PPG boards + game lines (ML, PL, total, team
   totals) in table `market_lines` (upserted, never cleared; in-play lines skipped).
