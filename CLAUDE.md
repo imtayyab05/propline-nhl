@@ -79,6 +79,15 @@ book's terms (1+/2+ points, anytime/2+ goals, 1+ assists). Promised free alongsi
 (Tayyab's 8 Oct reply): back-to-back penalty measured from last season, home and road
 separately; a warning on picks that depend on a "lean" goalie.
 
+Order 2 status (8 Oct): BUILT and live (propline/trends.py; tabs SOG Lines, 2+ Points,
+Multi-Goal, Streaks, Head-to-Head, DvP). Backtest on 14,508 player-games since 1 Mar
+2026: safe line cleared next game 77%, aggressive 47%; 3+ two-point games in last 10
+-> 2+ points next game 24% (vs 5% with none). Those figures are a check of the METHOD
+for the guide; the site itself shows only "x of y" track records. Head-to-head history
+(2023-24, 2024-25) is cached in data/cache/{season}/skater_history.csv and in Actions.
+Free fixes live: measured back-to-back (road -0.23, home -0.20 units on 8 Oct) and the
+Goalie Check column. Client guide (delivery/, git-ignored) updated to v2.
+
 **Client add-on (30 Sep):** when a starter who plays significant ice time is OUT, bump
 the remaining players who absorb his minutes — especially if he was offensive; it has
 implications at both ends of the ice. Needs injury/scratch data — see open problems.
