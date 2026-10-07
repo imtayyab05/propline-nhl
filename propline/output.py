@@ -50,6 +50,7 @@ PROP_MIDDLE = {
         ("opp_goalie", "Opp Goalie"),
         ("opp_goalie_sv", "Opp Goalie SV% (adj)"),
         ("opp_goalie_status", "Goalie Status"),
+        ("goalie_check", "Goalie Check"),
     ],
     "assists": [
         ("assists_recent", "Assists (L10)"),
@@ -57,6 +58,7 @@ PROP_MIDDLE = {
         ("pp_toi_recent", "PP TOI (L10)"),
         ("team_gf", "Team GF/G"),
         ("opp_ga", "Opp GA/G"),
+        ("goalie_check", "Goalie Check"),
     ],
     "points": [
         ("points_pg_recent", "Pts/G (L10)"),
@@ -67,6 +69,7 @@ PROP_MIDDLE = {
         ("opp_goalie", "Opp Goalie"),
         ("opp_goalie_sv", "Opp Goalie SV% (adj)"),
         ("opp_goalie_status", "Goalie Status"),
+        ("goalie_check", "Goalie Check"),
     ],
     "ppp": [
         ("ppp_recent", "PPP (L10)"),
@@ -75,6 +78,7 @@ PROP_MIDDLE = {
         ("pp_toi_bump", "+PP TOI (absences)"),
         ("opp_pen_taken", "Opp Times SH/G"),
         ("opp_pk_pct", "Opp PK%"),
+        ("goalie_check", "Goalie Check"),
     ],
 }
 
@@ -88,6 +92,7 @@ TOTAL_GOALS_COLS = [
     ("away_goalie", "Away Goalie"), ("away_goalie_sv", "Away SV% (adj)"),
     ("home_goalie", "Home Goalie"), ("home_goalie_sv", "Home SV% (adj)"),
     ("goalies_status", "Goalies (away / home)"),
+    ("goalie_check", "Goalie Check"),
     ("combined_pp_threat", "PP Threat Index"),
     ("missing_names", "Regulars Out"),
     ("combined_xg", "Combined xG/G"),
@@ -103,19 +108,22 @@ BOARD_SHEETS = {
         ("edge", "Edge"), ("score", "Score"), ("pick_ml", "Its ML"),
         ("dog_ml", "Other ML"), ("market_fav", "Market Favourite"),
         ("market_agrees", "Market Agrees"), ("pick_goalie", "Its Goalie"),
-        ("dog_goalie", "Other Goalie"), ("pick_b2b", "Its B2B"), ("dog_b2b", "Other B2B"),
+        ("dog_goalie", "Other Goalie"), ("goalie_check", "Goalie Check"),
+        ("pick_b2b", "Its B2B"), ("dog_b2b", "Other B2B"),
         ("rationale", "Why")]),
     "puck_line": ("Puck Line", [
         ("rank", "#"), ("subject", "Play"), ("matchup", "Matchup"), ("edge", "Edge"),
         ("score", "Score"), ("margin_fuel", "Its GF + Their GA"),
-        ("dog_goalie", "Goalie Faced"), ("pick_pl_point", "Market PL"),
+        ("dog_goalie", "Goalie Faced"), ("goalie_check", "Goalie Check"),
+        ("pick_pl_point", "Market PL"),
         ("pick_pl_price", "PL Price"), ("market_fav", "Market Favourite"),
         ("rationale", "Why")]),
     "team_goals": ("Team Goals", [
         ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
         ("gf", "GF/G"), ("xgf", "xGF/G"), ("opp_ga", "Opp GA/G"),
         ("opp_xga", "Opp xGA/G"), ("opp_goalie", "Goalie Faced"),
-        ("opp_goalie_sv", "Its SV% (adj)"), ("l10_gf", "GF/G L10"),
+        ("opp_goalie_sv", "Its SV% (adj)"), ("goalie_check", "Goalie Check"),
+        ("l10_gf", "GF/G L10"),
         ("market_team_total", "Market Team Total"), ("tt_over_price", "Over"),
         ("tt_under_price", "Under"), ("missing_names", "Regulars Out"),
         ("rationale", "Why")]),
@@ -132,12 +140,14 @@ BOARD_SHEETS = {
     "team_ppg": ("Team PPG", [
         ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
         ("pp_pct", "PP%"), ("ppg", "PPG/G"), ("opp_pen_taken", "Opp Times SH/G"),
-        ("opp_pk_pct", "Opp PK%"), ("opp_ppga", "Opp PPG Agst/G"), ("rationale", "Why")]),
+        ("opp_pk_pct", "Opp PK%"), ("opp_ppga", "Opp PPG Agst/G"),
+        ("goalie_check", "Goalie Check"), ("rationale", "Why")]),
     "game_ppg": ("Game PPG", [
         ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
         ("away_pp_pct", "Away PP%"), ("home_pp_pct", "Home PP%"),
         ("home_opp_pen_taken", "Away Times SH/G"),
         ("away_opp_pen_taken", "Home Times SH/G"), ("ppg_sum", "Combined PPG/G"),
+        ("goalie_check", "Goalie Check"),
         ("rationale", "Why")]),
 }
 

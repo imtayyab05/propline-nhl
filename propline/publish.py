@@ -14,13 +14,13 @@ from .db import check_json, delete_where, read, upsert
 # Per prop, matching the Excel tabs. The internal exp_* signals are NOT published.
 PROP_DETAIL = {
     "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "hd_pg"],
-    "goals": ["goals_recent", "goals60", "sh_pct", "ixg60", "hd_pg", "sog_pg_recent",
+    "goals": ["goalie_check", "goals_recent", "goals60", "sh_pct", "ixg60", "hd_pg", "sog_pg_recent",
               "pp_toi_recent",
               "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
-    "assists": ["assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
-    "points": ["points_pg_recent", "points60", "ixg60", "pp_toi_recent", "opp_ga",
+    "assists": ["goalie_check", "assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
+    "points": ["goalie_check", "points_pg_recent", "points60", "ixg60", "pp_toi_recent", "opp_ga",
                "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
-    "ppp": ["ppp_recent", "ppp_pg", "pp_toi_recent", "pp_toi_bump", "opp_pen_taken",
+    "ppp": ["goalie_check", "ppp_recent", "ppp_pg", "pp_toi_recent", "pp_toi_bump", "opp_pen_taken",
             "opp_pk_pct"],
 }
 # rationale_fp: fingerprint of the inputs the "Why" text was written from, so the next
@@ -32,26 +32,26 @@ GAME_DETAIL = ["rationale_fp", "home_team", "away_team", "home_gf_pg", "away_gf_
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
                "away_goalie_sv", "goalies_lean", "combined_pp_threat",
                "missing_regulars", "missing_names", "market_total", "over_price",
-               "under_price", "combined_xg"]
+               "under_price", "combined_xg", "goalie_check"]
 
 # Phase 2 boards. Team boards carry `team` so the dashboard's team filter finds them;
 # every board carries home_team / away_team for the same reason.
 BOARD_DETAIL = {
-    "team_goals": ["team", "opponent", "gf", "xgf", "opp_ga", "opp_xga", "opp_goalie",
+    "team_goals": ["goalie_check", "team", "opponent", "gf", "xgf", "opp_ga", "opp_xga", "opp_goalie",
                    "opp_goalie_sv",
                    "pp_threat", "l10_gf", "missing_names", "market_team_total",
                    "tt_over_price", "tt_under_price"],
     "team_sog": ["team", "opponent", "sf", "opp_sa", "l10_sf", "opp_l10_sa",
                  "missing_names"],
-    "team_ppg": ["team", "opponent", "ppg", "pp_pct", "opp_pen_taken", "opp_pk_pct",
+    "team_ppg": ["goalie_check", "team", "opponent", "ppg", "pp_pct", "opp_pen_taken", "opp_pk_pct",
                  "opp_ppga"],
     "game_sog": ["pace", "l10_pace", "home_sf", "away_sf", "home_sa", "away_sa"],
-    "game_ppg": ["pp_threat_sum", "ppg_sum", "ppga_sum", "home_pp_pct", "away_pp_pct",
+    "game_ppg": ["goalie_check", "pp_threat_sum", "ppg_sum", "ppga_sum", "home_pp_pct", "away_pp_pct",
                  "home_opp_pen_taken", "away_opp_pen_taken"],
-    "moneyline": ["pick", "dog", "edge", "gap", "pick_goalie", "dog_goalie", "pick_b2b",
+    "moneyline": ["goalie_check", "pick", "dog", "edge", "gap", "pick_goalie", "dog_goalie", "pick_b2b",
                   "dog_b2b", "home_missing_names", "away_missing_names", "pick_ml",
                   "dog_ml", "market_fav", "market_agrees"],
-    "puck_line": ["pick", "dog", "edge", "gap", "margin_fuel", "dog_goalie", "pick_ml",
+    "puck_line": ["goalie_check", "pick", "dog", "edge", "gap", "margin_fuel", "dog_goalie", "pick_ml",
                   "market_fav", "pick_pl_point", "pick_pl_price"],
 }
 BOARD_COMMON = ["rationale_fp", "home_team", "away_team"]

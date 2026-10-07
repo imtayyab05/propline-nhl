@@ -834,6 +834,7 @@ const EXTRA_COLS = {
     ['PP TOI', 'pp_toi_recent', mins],
     ['Opp Goalie', 'opp_goalie'],
     ['SV%', 'opp_goalie_sv', sv3],
+    ['Goalie Check', 'goalie_check'],
   ],
   assists: [
     ['Assists L10', 'assists_recent'],
@@ -841,6 +842,7 @@ const EXTRA_COLS = {
     ['PP TOI', 'pp_toi_recent', mins],
     ['Team GF/G', 'team_gf', num2],
     ['Opp GA/G', 'opp_ga', num2],
+    ['Goalie Check', 'goalie_check'],
   ],
   points: [
     ['Pts/G L10', 'points_pg_recent', num2],
@@ -850,6 +852,7 @@ const EXTRA_COLS = {
     ['Opp GA/G', 'opp_ga', num2],
     ['Opp Goalie', 'opp_goalie'],
     ['SV%', 'opp_goalie_sv', sv3],
+    ['Goalie Check', 'goalie_check'],
   ],
   ppp: [
     ['PPP L10', 'ppp_recent'],
@@ -858,6 +861,7 @@ const EXTRA_COLS = {
     ['+PP TOI', 'pp_toi_bump', plus],
     ['Opp Times SH/G', 'opp_pen_taken', num2],
     ['Opp PK%', 'opp_pk_pct', pctF],
+    ['Goalie Check', 'goalie_check'],
   ],
   total_goals: [
     ['Away GF/G', 'away_gf_pg', num2],
@@ -873,6 +877,7 @@ const EXTRA_COLS = {
     ['Market Total', 'market_total'],
     ['Over', 'over_price', ml],
     ['Under', 'under_price', ml],
+    ['Goalie Check', 'goalie_check'],
   ],
   // Phase 2. Market columns are US-book consensus; SOG and PP-goal boards have none
   // because no book in the feed offers those markets.
@@ -887,6 +892,7 @@ const EXTRA_COLS = {
     ['Other Goalie', 'dog_goalie'],
     ['Its B2B', 'pick_b2b', yesNo],
     ['Other B2B', 'dog_b2b', yesNo],
+    ['Goalie Check', 'goalie_check'],
   ],
   puck_line: [
     ['Edge', 'edge'],
@@ -895,6 +901,7 @@ const EXTRA_COLS = {
     ['Market PL', 'pick_pl_point', signed],
     ['PL Price', 'pick_pl_price', ml],
     ['Market Favourite', 'market_fav'],
+    ['Goalie Check', 'goalie_check'],
   ],
   team_goals: [
     ['Opp', 'opponent'],
@@ -909,6 +916,7 @@ const EXTRA_COLS = {
     ['Over', 'tt_over_price', ml],
     ['Under', 'tt_under_price', ml],
     ['Regulars Out', 'missing_names'],
+    ['Goalie Check', 'goalie_check'],
   ],
   game_sog: [
     ['Away SOG/G', 'away_sf', num1],
@@ -930,6 +938,7 @@ const EXTRA_COLS = {
     ['Away Times SH/G', 'home_opp_pen_taken', num2],
     ['Home Times SH/G', 'away_opp_pen_taken', num2],
     ['Combined PPG/G', 'ppg_sum', num2],
+    ['Goalie Check', 'goalie_check'],
   ],
   team_ppg: [
     ['Opp', 'opponent'],
@@ -938,6 +947,7 @@ const EXTRA_COLS = {
     ['Opp Times SH/G', 'opp_pen_taken', num2],
     ['Opp PK%', 'opp_pk_pct', pctF],
     ['Opp PPG Agst/G', 'opp_ppga', num2],
+    ['Goalie Check', 'goalie_check'],
   ],
 };
 // Shown on every player board after the prop columns: the add-on, made visible.
@@ -971,7 +981,12 @@ const ROSTER_SRC = {game_roster:"tonight's game roster", recent_games:'recent ga
    plain text shown and exported · html(row) = optional richer cell (badges) ·
    cls = cell class · asc = first click sorts low-to-high (ranks). */
 const C = (label, get, fmt, extra={}) => ({label, get, fmt, cls:'num', ...extra});
-const fromKey = (label, key, fmt) => C(label, r=>rawValue(r, key), fmt ? v=>fmt(v) : undefined);
+const fromKey = (label, key, fmt) => key === 'goalie_check'
+  // A pick that leans on a goalie we only have as "lean": amber, so it reads as "check
+  // your book before betting". Empty when every goalie involved is firm or confirmed.
+  ? C(label, r=>rawValue(r, key), null, {html: r=>{ const v = rawValue(r, key);
+      return `<td>${v ? `<span class="badge b-lean">${esc(v)}</span>` : ''}</td>`; }})
+  : C(label, r=>rawValue(r, key), fmt ? v=>fmt(v) : undefined);
 
 function rawValue(r, key){
   const d = r.details || {};

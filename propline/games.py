@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .scoring import _goalie_sv, _weighted
+from .scoring import _goalie_sv, _weighted, goalie_check
 
 WEIGHTS = {
     # team goals tonight
@@ -72,7 +72,7 @@ STRENGTH = {
 }
 GOALIE_WEIGHT = 0.20     # tonight's goalie, per .010 of save % above/below league
 HOME_ICE_FALLBACK = 0.13 # used only if last season's logs are missing; see home_ice_edge
-BACK_TO_BACK = -0.15     # second night of a back-to-back
+BACK_TO_BACK_FALLBACK = {"home": -0.24, "away": -0.29}   # used only without last season's logs
 MISSING_PER_60 = -0.10   # per 60 minutes of regular ice time out tonight
 
 TEAM_PROPS = ("team_goals", "team_sog", "team_ppg")
@@ -113,8 +113,54 @@ def home_ice_edge(team_logs: pd.DataFrame, team_tbl: pd.DataFrame, prev_season: 
     return float((wg * gd / sg + ws * sd / ss) * (wg + ws + wx) / (wg + ws))
 
 
+def back_to_back_edges(team_logs: pd.DataFrame, team_tbl: pd.DataFrame,
+                       prev_season: int) -> dict[str, float]:
+    """Back-to-back penalty in strength units, MEASURED from last season, home and road
+    separately. v1 used a flat -0.15 guess; the client's Gemini review (8 Oct 2026)
+    pointed at Ottawa on a road back-to-back, and the measurement says the guess was
+    about half the real effect.
+
+    Measured on the SKATERS only. On a back-to-back the goalie projection already
+    switches to the backup and the goalie term already prices him, so goals against are
+    replaced by what the team's normal goaltending would have allowed on those shots -
+    otherwise the backup-goalie effect would be counted twice. Each second night is
+    compared with the same team's other games at the same venue, so home ice (added
+    separately) is not counted twice either.
+
+    Measured 8 Oct 2026 on 2025-26: road -0.31 goals/game skater-side (n=269) = -0.29
+    units; home -0.21 (n=161, noisier) = -0.24 units.
+    """
+    tl = team_logs[(team_logs["season"] == prev_season) & (team_logs["game_type"] == 2)].copy()
+    sg, ss = team_tbl["goal_diff_pg_b"].std(), team_tbl["shot_diff_pg_b"].std()
+    if len(tl) < 1000 or not sg or not ss:
+        return dict(BACK_TO_BACK_FALLBACK)
+    tl["date"] = pd.to_datetime(tl["game_date"])
+    tl = tl.sort_values(["team", "date"])
+    tl["b2b"] = (tl["date"] - tl.groupby("team")["date"].shift()).dt.days == 1
+    tot = tl.groupby("team")[["goals_against", "shots_against"]].sum()
+    miss = tot["goals_against"] / tot["shots_against"]
+    tl["adj_gd"] = tl["goals_for"] - tl["shots_against"] * tl["team"].map(miss)
+    tl["sd"] = tl["shots_for"] - tl["shots_against"]
+    normal = tl[~tl["b2b"]].groupby(["team", "home_road"])[["adj_gd", "sd"]].mean()
+    wg, ws = STRENGTH["goal_diff_pg_b"], STRENGTH["shot_diff_pg_b"]
+    wx = STRENGTH.get("xg_diff_pg_b", 0.0) if "xg_diff_pg_b" in team_tbl else 0.0
+    out = {}
+    for venue, side in (("H", "home"), ("R", "away")):
+        b = tl[tl["b2b"] & (tl["home_road"] == venue)].join(normal, on=["team", "home_road"],
+                                                             rsuffix="_n")
+        if len(b) < 50:
+            out[side] = BACK_TO_BACK_FALLBACK[side]
+            continue
+        d_gd = (b["adj_gd"] - b["adj_gd_n"]).mean()
+        d_sd = (b["sd"] - b["sd_n"]).mean()
+        # same scaling as home_ice_edge: the xG term is assumed to move with goals+shots
+        out[side] = float((wg * d_gd / sg + ws * d_sd / ss) * (wg + ws + wx) / (wg + ws))
+    return out
+
+
 def team_context(schedule, team_tbl, starters, quality, absences,
-                 home_ice: float = HOME_ICE_FALLBACK) -> pd.DataFrame:
+                 home_ice: float = HOME_ICE_FALLBACK,
+                 b2b_edge: dict | None = None) -> pd.DataFrame:
     """One row per team playing tonight, with its own and its opponent's numbers."""
     if schedule.empty:
         return pd.DataFrame()
@@ -143,7 +189,7 @@ def team_context(schedule, team_tbl, starters, quality, absences,
             strength = (float(base.get(team, 0.0))
                         + GOALIE_WEIGHT * (mine.get("sv", lg_sv) - lg_sv) / 0.010
                         + (home_ice if side == "home" else 0.0)
-                        + (BACK_TO_BACK if b2b.get(team) else 0.0)
+                        + ((b2b_edge or BACK_TO_BACK_FALLBACK)[side] if b2b.get(team) else 0.0)
                         + MISSING_PER_60 * missing / 60)
             rows.append({
                 "game_id": g["game_id"], "team": team, "opponent": opp, "side": side,
@@ -166,9 +212,13 @@ def team_context(schedule, team_tbl, starters, quality, absences,
                 "pp_threat": t.at[team, "pp_pct_b"] * t.at[opp, "pen_taken_pg_b"],
                 "goalie": mine.get("name"), "goalie_sv": mine.get("sv"),
                 "goalie_status": mine.get("status"),
+                "goalie_conf": mine.get("confidence"),
                 "opp_goalie": theirs.get("name"), "opp_goalie_sv": theirs.get("sv"),
                 "opp_goalie_weak": 1 - theirs.get("sv", lg_sv),
                 "opp_goalie_status": theirs.get("status"),
+                "opp_goalie_conf": theirs.get("confidence"),
+                # team boards score this team's offence: the goalie it SHOOTS AT matters
+                "goalie_check": goalie_check((opp, theirs)),
                 "back_to_back": bool(b2b.get(team)), "missing_toi": round(missing, 1),
                 "missing_names": ab["missing_names"].get(team, "") if "missing_names" in ab else "",
                 "strength": strength,
@@ -203,12 +253,19 @@ def score_game_boards(schedule, team_tbl, starters, quality, absences,
     """Every Phase 2 board for tonight, keyed by prop."""
     home_ice = (home_ice_edge(team_logs, team_tbl, prev_season)
                 if team_logs is not None and prev_season else HOME_ICE_FALLBACK)
-    ctx = team_context(schedule, team_tbl, starters, quality, absences, home_ice)
+    b2b_edge = (back_to_back_edges(team_logs, team_tbl, prev_season)
+                if team_logs is not None and prev_season else dict(BACK_TO_BACK_FALLBACK))
+    ctx = team_context(schedule, team_tbl, starters, quality, absences, home_ice, b2b_edge)
     if ctx.empty:
         return {}
     boards = {p: _rank(ctx, WEIGHTS[p]) for p in TEAM_PROPS}
 
     g = _pair(ctx)
+    # game boards depend on both goalies
+    g["goalie_check"] = [
+        goalie_check((a, {"name": an, "confidence": ac}), (h, {"name": hn, "confidence": hc}))
+        for a, an, ac, h, hn, hc in zip(g["away_team"], g["away_goalie"], g["away_goalie_conf"],
+                                         g["home_team"], g["home_goalie"], g["home_goalie_conf"])]
     g["pace"] = g["home_sf"] + g["home_sa"] + g["away_sf"] + g["away_sa"]
     g["l10_pace"] = (g["home_l10_sf"] + g["away_l10_sf"] +
                      g["home_opp_l10_sa"] + g["away_opp_l10_sa"])

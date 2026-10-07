@@ -173,6 +173,19 @@ def _goalie_sv(starters: pd.DataFrame, quality: pd.DataFrame) -> dict[str, dict]
     return out
 
 
+def goalie_check(*sides) -> str:
+    """Warning text for picks that lean on a goalie we only have as a 'lean' projection.
+
+    sides = (team, goalie info from _goalie_sv) pairs; returns "" when every goalie
+    involved is a high-confidence projection or confirmed. Promised to the client on
+    8 Oct 2026 after Buffalo started Ellis over a 'lean' Luukkonen: the warning tells
+    him to check his book before betting, rather than pretending we know.
+    """
+    lean = [f"{(g or {}).get('name') or '?'} ({team})" for team, g in sides
+            if (g or {}).get("confidence") == "lean"]
+    return ("Not sure to start: " + ", ".join(lean)) if lean else ""
+
+
 def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
                        quality, absences) -> tuple[pd.DataFrame, dict]:
     """Every eligible skater on tonight's slate, scored for all five props.
@@ -231,6 +244,7 @@ def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
         lambda o: "{status}/{confidence}".format(**gk[o]) if o in gk else "unknown")
     df["opp_goalie_sv"] = df["opponent"].map(lambda o: (gk.get(o) or {}).get("sv", lg_sv))
     df["opp_goalie_weak"] = 1 - df["opp_goalie_sv"]
+    df["goalie_check"] = df["opponent"].map(lambda o: goalie_check((o, gk.get(o))))
 
     ab = absences.set_index("team") if not absences.empty else pd.DataFrame()
     df["opp_missing"] = df["opponent"].map(
@@ -303,6 +317,7 @@ def score_total_goals(schedule, team_tbl, starters, quality, absences) -> pd.Dat
             "goalies_status": f"{ag.get('status', '?')} / {hg.get('status', '?')}",
             "goalies_lean": int(hg.get("confidence") == "lean") +
                             int(ag.get("confidence") == "lean"),
+            "goalie_check": goalie_check((a, ag), (h, hg)),
             "missing_regulars": int(_ab(h, "missing_regulars") + _ab(a, "missing_regulars")),
             "missing_names": ", ".join(x for x in (_ab(a, "missing_names"),
                                                    _ab(h, "missing_names")) if x),

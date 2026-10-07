@@ -64,6 +64,21 @@ draft client messages that mention the live site or link to it.
   88-99.7% win probabilities; Magnus PRIME moneylines 7/14 while printing 53-96%.
   Their stated probabilities are not calibrated — supports our "rating, never win %".
 
+**Delivered 7 Oct 2026** (Phase 1 + 2 together); Devin accepted it on 7 Oct. The
+maintenance retainer moves to $75/month for MLB + NHL.
+
+**Order 2: trend features — $200, 7-day delivery, paid ~8 Oct 2026, due ~15 Oct.**
+Built only from the game logs already collected (no new paid data, no odds credits):
+safe and aggressive SOG line (1+/2+/3+/4+ cleared in last 10 / last 20 / season;
+safe = cleared in 8+ of 10, aggressive = about half), 2+ point spots, multi-goal (2+
+goals, info only), hot/cold streaks (points, shots, goals; last 5 vs season),
+head-to-head vs tonight's opponent (2-3 past seasons pulled once and cached; info
+only), DvP (shots, points, goals allowed to C / W / D, season and last 10). Every one
+shown as a plain track record ("2+ shots in 8 of last 10"), never a percentage, in his
+book's terms (1+/2+ points, anytime/2+ goals, 1+ assists). Promised free alongside it
+(Tayyab's 8 Oct reply): back-to-back penalty measured from last season, home and road
+separately; a warning on picks that depend on a "lean" goalie.
+
 **Client add-on (30 Sep):** when a starter who plays significant ice time is OUT, bump
 the remaining players who absorb his minutes — especially if he was offensive; it has
 implications at both ends of the ice. Needs injury/scratch data — see open problems.
