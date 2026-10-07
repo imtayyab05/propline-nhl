@@ -23,10 +23,12 @@ PROP_DETAIL = {
     "ppp": ["ppp_recent", "ppp_pg", "pp_toi_recent", "pp_toi_bump", "opp_pen_taken",
             "opp_pk_pct"],
 }
-COMMON_DETAIL = ["position", "recent_games", "gp_season", "toi_recent", "toi_bump",
+# rationale_fp: fingerprint of the inputs the "Why" text was written from, so the next
+# Groq run can reuse the text when they are unchanged (propline/rationale.py).
+COMMON_DETAIL = ["rationale_fp", "position", "recent_games", "gp_season", "toi_recent", "toi_bump",
                  "bump_from", "opp_missing", "game_id"]
 
-GAME_DETAIL = ["home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg",
+GAME_DETAIL = ["rationale_fp", "home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg",
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
                "away_goalie_sv", "goalies_lean", "combined_pp_threat",
                "missing_regulars", "missing_names", "market_total", "over_price",
@@ -52,7 +54,7 @@ BOARD_DETAIL = {
     "puck_line": ["pick", "dog", "edge", "gap", "margin_fuel", "dog_goalie", "pick_ml",
                   "market_fav", "pick_pl_point", "pick_pl_price"],
 }
-BOARD_COMMON = ["home_team", "away_team"]
+BOARD_COMMON = ["rationale_fp", "home_team", "away_team"]
 
 TEAM_COLS = ["team_id", "team", "team_name", "power_rank", "power_score", "gp", "record",
              "points", "points_pct", "gf_pg", "ga_pg", "sf_pg", "sa_pg", "ppg_pg",
@@ -108,15 +110,56 @@ def _keep_rationale(table: str, df: pd.DataFrame, day: str, keys: list[str]) -> 
     """
     if "rationale" not in df or df["rationale"].notna().all():
         return df
-    prev = read(table, {"select": ",".join(keys + ["rationale"]),
+    # The fingerprint travels with the text. Without it the next Groq run would see a
+    # sentence with no fingerprint and pay to rewrite every carried pick.
+    prev = read(table, {"select": ",".join(keys + ["rationale"]) + ",_oldfp:details->>rationale_fp",
                         "slate_date": f"eq.{day}", "rationale": "not.is.null",
                         "limit": "5000"})
     if not prev:
         return df
     old = pd.DataFrame(prev).rename(columns={"rationale": "_old"})
     out = df.merge(old, on=keys, how="left")
-    out["rationale"] = out["rationale"].where(out["rationale"].notna(), out["_old"])
-    return out.drop(columns="_old")
+    carried = out["rationale"].isna() & out["_old"].notna()
+    out["rationale"] = out["rationale"].where(~carried, out["_old"])
+    if "details" in out:
+        out["details"] = [
+            {**(d or {}), "rationale_fp": fp} if c and fp else d
+            for d, c, fp in zip(out["details"], carried, out["_oldfp"])]
+    return out.drop(columns=["_old", "_oldfp"])
+
+
+TEAM_BOARDS = ("team_goals", "team_sog", "team_ppg")
+
+
+def previous_rationales(slate_date) -> dict:
+    """Explanations already published for this slate, for add_rationales to reuse.
+
+    Keyed the way process.py keys its picks: (prop, player_id) for player props,
+    (prop, game_id, team) for the team boards, (prop, game_id) for every other game
+    board - each with the fingerprint of the inputs its sentence was written from.
+    Only rows that HAVE text are fetched (~150), well under PostgREST's 1,000-row cap.
+    Failure here just means everything is written afresh.
+    """
+    out: dict = {}
+    try:
+        for r in read("prop_picks", {
+                "select": "prop,subject_id,rationale,fp:details->>rationale_fp",
+                "slate_date": f"eq.{slate_date}", "rationale": "not.is.null",
+                "limit": "1000"}):
+            if r.get("fp") and r.get("subject_id") is not None:
+                out[(r["prop"], int(r["subject_id"]))] = (r["fp"], r["rationale"])
+        for r in read("game_picks", {
+                "select": "prop,game_id,subject,rationale,fp:details->>rationale_fp",
+                "slate_date": f"eq.{slate_date}", "rationale": "not.is.null",
+                "limit": "1000"}):
+            if not r.get("fp") or r.get("game_id") is None:
+                continue
+            key = ((r["prop"], int(r["game_id"]), r["subject"]) if r["prop"] in TEAM_BOARDS
+                   else (r["prop"], int(r["game_id"])))
+            out[key] = (r["fp"], r["rationale"])
+    except Exception as exc:  # noqa: BLE001 - reuse is an optimisation, never a blocker
+        print(f"  WARN  could not read earlier explanations ({exc}) - writing all afresh")
+    return out
 
 
 def _snapshot(table: str, df: pd.DataFrame, filters: dict, on_conflict: str) -> int:

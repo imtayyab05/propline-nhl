@@ -135,8 +135,10 @@ def main() -> int:
     # 5. What the league has published for tonight
     print("\n[5/6] Game rosters, starters and who is out")
     dressed, confirmed = nhl.get_game_day(schedule["game_id"])
+    states = confirmed.attrs.get("states", {})
+    state_note = ", ".join(f"{k} {v}" for k, v in sorted(states.items())) or "none"
     print(f"  ok    game rosters posted for {dressed['game_id'].nunique()}/{len(schedule)} "
-          f"games, starters confirmed for {len(confirmed)} teams")
+          f"games, starters confirmed for {len(confirmed)} teams (game states: {state_note})")
 
     starters = project_starters(schedule, rosters, goalie_logs, team_logs, season, prev,
                                 day, dressed=dressed, confirmed=confirmed)
@@ -176,7 +178,7 @@ def main() -> int:
             detail=(f"{len(schedule)} games, {len(skater_cur)} skater rows this season, "
                     f"{len(outs)} regulars out, goalies: "
                     f"{(starters['status'] == 'confirmed').sum()} confirmed / {len(starters)}, "
-                    f"shot data {shot_games}/{len(done_games)} games"),
+                    f"shot data {shot_games}/{len(done_games)} games, states: {state_note}"),
             started_at=started)
     print(f"\n{'='*66}\ncollection {status.upper()}")
     return 0

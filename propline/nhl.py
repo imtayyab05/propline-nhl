@@ -153,6 +153,12 @@ def get_rosters(abbrevs) -> pd.DataFrame:
 # --- game-day rosters and confirmed starters ------------------------------------
 
 DRESSED_COLS = ["game_id", "team_id", "player_id", "position", "source"]
+# States in which no goalie has played yet. Every OTHER state is checked for a starter.
+# The first version listed the started states instead (LIVE, CRIT, OFF, FINAL) and
+# missed OVER - a game just ended, not yet official - so the late run, which lands as
+# the 7pm games finish, confirmed 0 of 18 goalies on 6 Oct 2026. Listing the few
+# not-started states means a state the league adds later is checked, not skipped.
+NOT_STARTED = {"FUT", "PRE"}
 STARTER_COLS = ["game_id", "team_id", "goalie_id"]
 
 
@@ -166,7 +172,7 @@ def get_game_day(game_ids) -> tuple[pd.DataFrame, pd.DataFrame]:
     Both come back empty (with columns) when nothing is published yet; that is the
     normal state for most of the day, not an error.
     """
-    dressed, starters = [], []
+    dressed, starters, states = [], [], {}
     for gid in game_ids:
         try:
             pbp = _get(f"{WEB}/gamecenter/{gid}/play-by-play")
@@ -177,16 +183,40 @@ def get_game_day(game_ids) -> tuple[pd.DataFrame, pd.DataFrame]:
             dressed.append({"game_id": gid, "team_id": s["teamId"],
                             "player_id": s["playerId"],
                             "position": s.get("positionCode"), "source": "game_roster"})
-        if pbp.get("gameState") in ("LIVE", "CRIT", "OFF", "FINAL"):
-            box = _get(f"{WEB}/gamecenter/{gid}/boxscore")
+        state = pbp.get("gameState") or "?"
+        states[state] = states.get(state, 0) + 1
+        if state not in NOT_STARTED:
+            try:
+                box = _get(f"{WEB}/gamecenter/{gid}/boxscore")
+            except FeedError as exc:
+                print(f"  WARN  boxscore for {gid} unavailable: {exc}")
+                continue
             for side in ("homeTeam", "awayTeam"):
                 tid = box[side]["id"]
-                for gk in box.get("playerByGameStats", {}).get(side, {}).get("goalies", []):
-                    if gk.get("starter"):
-                        starters.append({"game_id": gid, "team_id": tid,
-                                         "goalie_id": gk["playerId"]})
-    return (pd.DataFrame(dressed, columns=DRESSED_COLS),
-            pd.DataFrame(starters, columns=STARTER_COLS))
+                goalies = box.get("playerByGameStats", {}).get(side, {}).get("goalies", [])
+                flagged = [gk for gk in goalies if gk.get("starter")]
+                if not flagged:
+                    # No starter flag yet (early in a live game): the one goalie who has
+                    # logged ice time started. Two with time = a pull; leave it unset
+                    # rather than guess which one started.
+                    played = [gk for gk in goalies if _secs(gk.get("toi")) > 0]
+                    flagged = played if len(played) == 1 else []
+                for gk in flagged[:1]:
+                    starters.append({"game_id": gid, "team_id": tid,
+                                     "goalie_id": gk["playerId"]})
+    out = (pd.DataFrame(dressed, columns=DRESSED_COLS),
+           pd.DataFrame(starters, columns=STARTER_COLS))
+    out[1].attrs["states"] = states       # for the run log: what the feed said
+    return out
+
+
+def _secs(toi) -> int:
+    """'12:34' -> 754; anything unreadable -> 0."""
+    try:
+        m, s = str(toi).split(":")
+        return int(m) * 60 + int(s)
+    except (ValueError, AttributeError):
+        return 0
 
 
 # --- stats REST API -------------------------------------------------------------

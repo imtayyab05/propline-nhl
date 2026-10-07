@@ -27,7 +27,8 @@ from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
 from propline.goalies import goalie_quality  # noqa: E402
 from propline import odds  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
-from propline.publish import publish_lines, publish_slate, read_lines  # noqa: E402
+from propline.publish import (previous_rationales, publish_lines,  # noqa: E402
+                              publish_slate, read_lines)
 from propline.scoring import (player_rates, score_player_props,  # noqa: E402
                               score_total_goals)
 from propline.storage import upload_workbook  # noqa: E402
@@ -110,7 +111,13 @@ BOARD_FIELDS = {
 BOARD_EXPLAIN_TOP = 5      # Phase 2 boards are short; five each keeps Groq use small
 
 
-def explain_boards(boards: dict) -> dict:
+# What identifies a pick across runs, for reusing its Why text. Must match the keys
+# publish.previous_rationales builds from the stored rows.
+BOARD_KEYS = {"team_goals": ["game_id", "team"], "team_sog": ["game_id", "team"],
+              "team_ppg": ["game_id", "team"]}
+
+
+def explain_boards(boards: dict, previous: dict | None = None) -> dict:
     from propline.rationale import GAME_SYSTEM, add_rationales
 
     out = {}
@@ -120,12 +127,20 @@ def explain_boards(boards: dict) -> dict:
         # rates go out as percents: the model wrote "0.235 power-play percentage"
         for c in [c for c in send.columns if c.endswith(("pp_pct", "pk_pct"))]:
             send[c] = (100 * pd.to_numeric(send[c], errors="coerce")).round(1)
-        out[prop] = add_rationales(send, ["prop"] + BOARD_FIELDS[prop], prop,
-                                   top_n=BOARD_EXPLAIN_TOP, system=GAME_SYSTEM)
+        done = add_rationales(send, ["prop"] + BOARD_FIELDS[prop], prop,
+                              top_n=BOARD_EXPLAIN_TOP, system=GAME_SYSTEM,
+                              key_cols=BOARD_KEYS.get(prop, ["game_id"]),
+                              previous=previous)
+        # Copy back ONLY the sentence and its fingerprint. Returning `send` itself
+        # published its percent-scaled PP% (23.5 instead of 0.235) on every Groq run,
+        # so the PPG boards read 2350% from the pre-game run until the next one.
+        g = b.copy()
+        g["rationale"], g["rationale_fp"] = done["rationale"], done["rationale_fp"]
+        out[prop] = g
     return out
 
 
-def explain(player_scores, total_goals, top_n):
+def explain(player_scores, total_goals, top_n, previous: dict | None = None):
     """Attach the one-line Why text. Fractions the model would misread (0.141 shooting)
     are sent as percents, and zero bumps are dropped so it does not mention them."""
     from propline.rationale import TOTALS_SYSTEM, add_rationales
@@ -141,13 +156,15 @@ def explain(player_scores, total_goals, top_n):
         send["bump_from"] = send["bump_from"].where(
             send["toi_bump"].notna() | send["pp_toi_bump"].notna())
         done = add_rationales(send, RATIONALE_COMMON + RATIONALE_FIELDS[prop], prop,
-                              top_n=top_n)
+                              top_n=top_n, key_cols=["player_id"], previous=previous)
         g["rationale"] = done["rationale"]
+        g["rationale_fp"] = done["rationale_fp"]
         parts.append(g)
     player_scores = pd.concat(parts, ignore_index=True)
     if not total_goals.empty:
         total_goals = add_rationales(total_goals, TOTALS_FIELDS, "total_goals",
-                                     top_n=top_n, system=TOTALS_SYSTEM)
+                                     top_n=top_n, system=TOTALS_SYSTEM,
+                                     key_cols=["game_id"], previous=previous)
     return player_scores, total_goals
 
 
@@ -287,9 +304,13 @@ def main() -> int:
         print("\n[4/5] Written reasons — nothing to explain")
     else:
         print(f"\n[4/5] Written reasons (Groq, top {args.explain_top} per board)")
-        player_scores, total_goals = explain(player_scores, total_goals, args.explain_top)
+        # What earlier runs today already explained. Unchanged picks reuse their text,
+        # so a Groq run only pays for picks that are new or whose numbers moved.
+        previous = previous_rationales(day)
+        player_scores, total_goals = explain(player_scores, total_goals, args.explain_top,
+                                             previous)
         if game_boards:
-            game_boards = explain_boards(game_boards)
+            game_boards = explain_boards(game_boards, previous)
 
     print("\n[5/5] Picks workbook")
     outs = avail[(avail["status"] == "out") & avail["regular"]] if not avail.empty else avail
