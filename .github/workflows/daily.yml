@@ -102,6 +102,8 @@ jobs:
           if [ "$M" -ge 7 ]; then S=$((Y - 1)); else S=$((Y - 2)); fi
           echo "prev=${S}$((S + 1))" >> "$GITHUB_OUTPUT"
           echo "cur=$((S + 1))$((S + 2))" >> "$GITHUB_OUTPUT"
+          echo "older1=$((S - 1))${S}" >> "$GITHUB_OUTPUT"
+          echo "older2=$((S - 2))$((S - 1))" >> "$GITHUB_OUTPUT"
           echo "Slate $DATE — $KIND"
 
       - name: Restore last season's logs
@@ -109,6 +111,16 @@ jobs:
         with:
           path: data/cache/${{ steps.cfg.outputs.prev }}
           key: nhl-prev-logs-${{ steps.cfg.outputs.prev }}
+
+      # Two older seasons' scoring lines, for head-to-head. Finished seasons never
+      # change, so one cache entry per pair lasts the whole season.
+      - name: Restore head-to-head history
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache/${{ steps.cfg.outputs.older1 }}
+            data/cache/${{ steps.cfg.outputs.older2 }}
+          key: nhl-history-${{ steps.cfg.outputs.older1 }}-${{ steps.cfg.outputs.older2 }}
 
       # This season's shot locations (input to the xG model) grow by a few games a day.
       # A cache key is write-once, so each run saves under its own key and restores the

@@ -126,6 +126,15 @@ def main() -> int:
           f"{shot_games}/{len(done_games)} games ({shots.attrs['fetched']} fetched now"
           f"{', ' + str(shots.attrs['failed']) + ' failed' if shots.attrs['failed'] else ''})")
 
+    # 3c. Older seasons' scoring lines, for head-to-head only (order 2, Oct 2026).
+    # Finished seasons never change: pulled once (~25 requests each) and cached.
+    older = [nhl.previous_season(prev), nhl.previous_season(nhl.previous_season(prev))]
+    history = pd.concat([nhl.cached(Path("data/cache") / str(s) / "skater_history.csv",
+                                    lambda s=s: nhl.skater_history(s)) for s in older],
+                        ignore_index=True)
+    print(f"  ok    head-to-head history: {len(history):,} rows from "
+          f"{history['season'].nunique() if not history.empty else 0} older seasons")
+
     # 4. Rosters for tonight's teams
     print("\n[4/6] Current rosters")
     playing = sorted(set(schedule["home_team"]) | set(schedule["away_team"]))
@@ -159,7 +168,8 @@ def main() -> int:
     # 6. Write
     print("\n[6/6] Writing")
     for name, df in (("team_logs", team_logs), ("goalie_logs", goalie_logs),
-                     ("skater_logs", skater_logs), ("shots", shots)):
+                     ("skater_logs", skater_logs), ("shots", shots),
+                     ("history", history)):
         df.to_csv(logs_dir / f"{name}.csv", index=False)
     meta = pd.DataFrame([{"day": day, "season": season, "prev_season": prev,
                           "collected_at": datetime.now().isoformat(timespec="seconds"),

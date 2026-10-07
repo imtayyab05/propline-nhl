@@ -288,6 +288,35 @@ def skater_game_logs(season: int, start: date, end: date,
     return out.drop_duplicates(["player_id", "game_id"])[SKATER_LOG_COLS]
 
 
+HISTORY_COLS = ["player_id", "player_name", "team", "opponent", "game_id", "game_date",
+                "season", "position", "goals", "assists", "points", "shots"]
+
+
+def skater_history(season: int) -> pd.DataFrame:
+    """A past regular season's scoring lines only (no ice time) - for head-to-head.
+
+    Half the requests of skater_game_logs: head-to-head needs goals, assists, points
+    and shots against an opponent, nothing about ice time. Pulled once per season and
+    cached; a finished season never changes. The date window covers any regular season
+    (they run October to mid-April); the 10,000-row cap is checked per 14-day chunk.
+    """
+    y = season // 10000
+    rows = []
+    for a, b in _chunks(date(y, 9, 20), date(y + 1, 5, 15)):
+        c = f'seasonId={season} and gameTypeId=2 and gameDate>="{a}" and gameDate<="{b}"'
+        rows += _stats("skater/summary", c)
+    if not rows:
+        return pd.DataFrame(columns=HISTORY_COLS)
+    s = pd.DataFrame(rows)
+    out = pd.DataFrame({
+        "player_id": s["playerId"], "player_name": s["skaterFullName"],
+        "team": s["teamAbbrev"], "opponent": s["opponentTeamAbbrev"],
+        "game_id": s["gameId"], "game_date": s["gameDate"].astype(str).str[:10],
+        "season": season, "position": s["positionCode"], "goals": s["goals"],
+        "assists": s["assists"], "points": s["points"], "shots": s["shots"]})
+    return out.drop_duplicates(["player_id", "game_id"])[HISTORY_COLS]
+
+
 GOALIE_LOG_COLS = ["player_id", "player_name", "team", "opponent", "game_id",
                    "game_date", "season", "started", "shots_against", "saves",
                    "goals_against", "toi"]

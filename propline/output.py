@@ -38,9 +38,12 @@ PROP_MIDDLE = {
         ("shots60", "SOG/60 (season)"),
         ("opp_sa_pos", "Opp SOG Allowed to Pos/G"),
         ("hd_pg", "Dangerous Shots/G"),
+        ("safe_sog", "Safe SOG Line (L10)"),
+        ("aggressive_sog", "Aggressive SOG Line (L10)"),
     ],
     "goals": [
         ("goals_recent", "Goals (L10)"),
+        ("goal1_l10", "Anytime Goal (L10)"),
         ("goals60", "Goals/60 (season)"),
         ("sh_pct", "Shooting % (adj)"),
         ("ixg60", "xG/60"),
@@ -54,6 +57,7 @@ PROP_MIDDLE = {
     ],
     "assists": [
         ("assists_recent", "Assists (L10)"),
+        ("ast1_l10", "1+ Assist (L10)"),
         ("assists60", "Assists/60 (season)"),
         ("pp_toi_recent", "PP TOI (L10)"),
         ("team_gf", "Team GF/G"),
@@ -62,6 +66,8 @@ PROP_MIDDLE = {
     ],
     "points": [
         ("points_pg_recent", "Pts/G (L10)"),
+        ("pts1_l10", "1+ Pts (L10)"),
+        ("pts2_l10", "2+ Pts (L10)"),
         ("points60", "Pts/60 (season)"),
         ("ixg60", "xG/60"),
         ("pp_toi_recent", "PP TOI (L10)"),
@@ -82,8 +88,61 @@ PROP_MIDDLE = {
     ],
 }
 
+TREND_MIDDLE = {
+    "sog_lines": [
+        ("safe_sog", "Safe Line (L10)"), ("aggressive_sog", "Aggressive Line (L10)"),
+        ("sog1_l10", "1+ L10"), ("sog2_l10", "2+ L10"), ("sog3_l10", "3+ L10"),
+        ("sog4_l10", "4+ L10"),
+        ("sog1_l20", "1+ L20"), ("sog2_l20", "2+ L20"), ("sog3_l20", "3+ L20"),
+        ("sog4_l20", "4+ L20"),
+        ("sog2_season", "2+ Season"), ("sog3_season", "3+ Season"),
+        ("season_basis", "Season"), ("opp_sa_pos", "Opp SOG Allowed to Pos/G"),
+        ("toi_bump", "+TOI (absences)"),
+    ],
+    "multi_point": [
+        ("pts1_l10", "1+ Pts L10"), ("pts2_l10", "2+ Pts L10"), ("pts2_l20", "2+ Pts L20"),
+        ("pts2_season", "2+ Pts Season"), ("season_basis", "Season"),
+        ("points_pg_recent", "Pts/G L10"), ("pp_toi_recent", "PP TOI (L10)"),
+        ("opp_ga", "Opp GA/G"), ("goalie_check", "Goalie Check"),
+    ],
+    "multi_goal": [
+        ("goal1_l10", "Anytime L10"), ("goal1_l20", "Anytime L20"),
+        ("goal2_l20", "2+ Goals L20"), ("goal2_season", "2+ Goals Season"),
+        ("goal2_last_season", "2+ Goals Last Season"), ("season_basis", "Season"),
+        ("ixg60", "xG/60"), ("hd_pg", "Dangerous Shots/G"),
+        ("goalie_check", "Goalie Check"),
+    ],
+    "streaks": [
+        ("form", "Form"), ("point_streak", "Point Streak"), ("goal_streak", "Goal Streak"),
+        ("sog3_streak", "3+ SOG Streak"), ("pointless", "Games Without a Point"),
+        ("goalless", "Games Without a Goal"),
+        ("pts_l5", "Pts/G L5"), ("pts_season", "Pts/G Season"),
+        ("sog_l5", "SOG/G L5"), ("sog_season", "SOG/G Season"),
+        ("goals_l5", "Goals/G L5"), ("goals_season", "Goals/G Season"),
+        ("season_basis", "Season"),
+    ],
+    "h2h": [
+        ("h2h_summary", "Vs Tonight's Opponent"), ("h2h_gp", "GP"), ("h2h_goals", "G"),
+        ("h2h_assists", "A"), ("h2h_points", "P"), ("h2h_pts1", "1+ Pts"),
+        ("h2h_sog_pg", "SOG/G"), ("h2h_seasons", "Seasons"), ("dvp_note", "Opp DvP"),
+    ],
+}
+PROP_MIDDLE.update(TREND_MIDDLE)
+
 SHEET_TITLES = {"sog": "Shots on Goal", "points": "Points", "goals": "Goals",
-                "assists": "Assists", "ppp": "PP Points"}
+                "assists": "Assists", "ppp": "PP Points",
+                "sog_lines": "SOG Lines", "multi_point": "2+ Points",
+                "multi_goal": "Multi-Goal", "streaks": "Streaks", "h2h": "Head-to-Head"}
+
+# DvP: what each team allows to centres, wingers and defence (all at that position
+# combined, per game), with its rank among 32 teams (1 = allows the most).
+DVP_COLS = [("team", "Team")] + [
+    (f"dvp_{pg}_{s}_{w}{r}", f"{name} {lab} {wl}{' Rank' if r else ''}")
+    for pg, name in (("C", "To C"), ("W", "To W"), ("D", "To D"))
+    for s, lab in (("sog", "SOG/G"), ("pts", "Pts/G"), ("g", "G/G"))
+    for w, wl in (("season", "Season"), ("l10", "L10"), ("last", "Last Season"))
+    for r in ("", "_rank")
+] + [("dvp_gp_season", "GP This Season")]
 
 TOTAL_GOALS_COLS = [
     ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
@@ -186,6 +245,9 @@ OUT_COLS = [
 
 
 def columns_for(prop: str):
+    # trend tabs are track records: no ice-time tail and no Why column
+    if prop in TREND_MIDDLE:
+        return HEAD + PROP_MIDDLE[prop]
     return HEAD + PROP_MIDDLE.get(prop, []) + TAIL
 
 
@@ -221,6 +283,7 @@ def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
             boards.append(((game_boards or {}).get(prop), spec, title))
         for frame, spec, title in (*boards,
                                    (team_tbl, TEAM_COLS, "Team Stats"),
+                                   (team_tbl, DVP_COLS, "DvP"),
                                    (starters, GOALIE_COLS, "Goalies"),
                                    (outs, OUT_COLS, "Out Tonight")):
             if frame is not None and not frame.empty:

@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from propline.availability import team_absences  # noqa: E402
 from propline.db import load_env, log_run  # noqa: E402
 from propline.games import score_game_boards  # noqa: E402
+from propline.trends import (attach_dvp, build_trend_boards, dvp_table,  # noqa: E402
+                             player_trends)
 from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
                             player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
@@ -312,6 +314,31 @@ def main() -> int:
         if game_boards:
             game_boards = explain_boards(game_boards, previous)
 
+    # Trend features (order 2): track records BESIDE the boards, never inside the
+    # scores. DvP is league-wide, so it is built even on an off-day.
+    trend_note = "none"
+    try:
+        dvp = dvp_table(skater_logs, season, prev, day)
+        if not dvp.empty:
+            team_tbl = team_tbl.merge(dvp, on="team", how="left")
+        if not player_scores.empty:
+            hist_path = logs_dir / "history.csv"
+            history = pd.read_csv(hist_path) if hist_path.exists() else pd.DataFrame()
+            players = player_scores.drop_duplicates("player_id")[
+                ["player_id", "player_name", "team", "opponent", "position"]]
+            tr = attach_dvp(player_trends(players, skater_logs, history, season, prev, day),
+                            players, dvp)
+            player_scores = player_scores.merge(tr, on="player_id", how="left")
+            trends = build_trend_boards(player_scores)
+            player_scores = pd.concat([player_scores, trends], ignore_index=True)
+            trend_note = (f"{len(tr)} players; head-to-head for "
+                          f"{int((tr['h2h_gp'] > 0).sum())}; history from "
+                          f"{history['season'].nunique() if not history.empty else 0} older seasons")
+        print(f"  ok    trends: {trend_note}; DvP for {len(dvp)} teams")
+    except Exception as exc:  # noqa: BLE001 - the boards must publish even if this breaks
+        trend_note = f"failed: {exc}"
+        print(f"  WARN  trends {trend_note}")
+
     print("\n[5/5] Picks workbook")
     outs = avail[(avail["status"] == "out") & avail["regular"]] if not avail.empty else avail
     team_tbl, starters, outs = _round(team_tbl), _round(starters), _round(outs)
@@ -327,6 +354,7 @@ def main() -> int:
         "Skipped: under 3 games of history": cov.get("too_few_games", 0),
         "Market lines": odds_note,
         "Shot quality (xG)": xg_note,
+        "Trends": trend_note,
         "Note": ("Scores rank tonight's slate 0-100; they are not probabilities. "
                  "Early season: rates lean on last season until this season has games."),
     }

@@ -13,18 +13,38 @@ from .db import check_json, delete_where, read, upsert
 # Stored alongside each pick so the dashboard can show the "why" without recomputing.
 # Per prop, matching the Excel tabs. The internal exp_* signals are NOT published.
 PROP_DETAIL = {
-    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "hd_pg"],
-    "goals": ["goalie_check", "goals_recent", "goals60", "sh_pct", "ixg60", "hd_pg", "sog_pg_recent",
+    "sog": ["sog_pg_recent", "shots60", "opp_sa_pos", "hd_pg", "safe_sog",
+            "aggressive_sog"],
+    "goals": ["goalie_check", "goal1_l10", "goals_recent", "goals60", "sh_pct", "ixg60", "hd_pg", "sog_pg_recent",
               "pp_toi_recent",
               "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
-    "assists": ["goalie_check", "assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
-    "points": ["goalie_check", "points_pg_recent", "points60", "ixg60", "pp_toi_recent", "opp_ga",
+    "assists": ["goalie_check", "ast1_l10", "assists_recent", "assists60", "pp_toi_recent", "team_gf", "opp_ga"],
+    "points": ["goalie_check", "pts1_l10", "pts2_l10", "points_pg_recent", "points60", "ixg60", "pp_toi_recent", "opp_ga",
                "opp_goalie", "opp_goalie_sv", "opp_goalie_status"],
     "ppp": ["goalie_check", "ppp_recent", "ppp_pg", "pp_toi_recent", "pp_toi_bump", "opp_pen_taken",
             "opp_pk_pct"],
 }
 # rationale_fp: fingerprint of the inputs the "Why" text was written from, so the next
 # Groq run can reuse the text when they are unchanged (propline/rationale.py).
+# Trend tabs (order 2): every track record the tab shows, as "x/y" strings and counts.
+PROP_DETAIL.update({
+    "sog_lines": ["safe_sog", "aggressive_sog", "safe_level", "aggressive_level",
+                  "sog1_l10", "sog2_l10", "sog3_l10", "sog4_l10", "sog1_l20", "sog2_l20",
+                  "sog3_l20", "sog4_l20", "sog1_season", "sog2_season", "sog3_season",
+                  "sog4_season", "season_basis", "opp_sa_pos"],
+    "multi_point": ["pts1_l10", "pts2_l10", "pts2_l20", "pts2_season", "pts2_count_l20",
+                    "season_basis", "points_pg_recent", "pp_toi_recent", "opp_ga",
+                    "goalie_check"],
+    "multi_goal": ["goal1_l10", "goal1_l20", "goal2_l20", "goal2_season",
+                   "goal2_last_season", "goal2_count", "season_basis", "ixg60", "hd_pg",
+                   "goalie_check"],
+    "streaks": ["form", "point_streak", "goal_streak", "sog3_streak", "pointless",
+                "goalless", "pts_l5", "pts_season", "sog_l5", "sog_season", "goals_l5",
+                "goals_season", "season_basis"],
+    "h2h": ["h2h_summary", "h2h_gp", "h2h_goals", "h2h_assists", "h2h_points",
+            "h2h_pts1", "h2h_sog_pg", "h2h_seasons", "dvp_note"],
+})
+
 COMMON_DETAIL = ["rationale_fp", "position", "recent_games", "gp_season", "toi_recent", "toi_bump",
                  "bump_from", "opp_missing", "game_id"]
 
@@ -65,7 +85,10 @@ TEAM_DETAIL = ["gf_pg_b", "ga_pg_b", "sf_pg_b", "sa_pg_b", "pp_pct_b", "pk_pct_b
                "goal_diff_pg_b", "shot_diff_pg_b", "l10_goal_diff_pg", "current_weight",
                # shot quality rides in details: no schema change needed
                "xgf_pg", "xga_pg", "l10_xgf_pg", "l10_xga_pg", "xgf_pg_b", "xga_pg_b",
-               "xg_diff_pg_b", "xg_gp"]
+               "xg_diff_pg_b", "xg_gp"] + [
+    # DvP (order 2): allowed per game to each position, season and last 10, with ranks
+    f"dvp_{pg}_{s}_{w}{r}" for pg in ("C", "W", "D") for s in ("sog", "pts", "g")
+    for w in ("season", "l10", "last") for r in ("", "_rank")] + ["dvp_gp_season"]
 
 # Columns the database types as bigint/int. Pandas widens any column containing a
 # missing value to float, so an id arrives as "8478048.0" and Postgres rejects it.

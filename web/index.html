@@ -224,7 +224,10 @@
   .primary:hover:not(:disabled){box-shadow:0 8px 24px rgba(78,161,255,.32)}
 
   main{padding:20px;max-width:1500px;margin:0 auto}
-  .tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .tabgroup{flex-basis:100%;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--dim);margin:6px 0 -2px}
+  .tabgroup:first-child{margin-top:0}
   .tab{
     padding:8px 15px;border-radius:9px;background:var(--panel);
     border:1px solid var(--line);cursor:pointer;font-size:14px;position:relative;
@@ -457,13 +460,22 @@
 <script src="config.local.js" onerror="void 0"></script>
 
 <script>
+// `group` draws a small label before the first tab of each group: 23 tabs read as four
+// shelves instead of one long row.
 const PROPS = [
-  {key:'sog',          label:'Shots on Goal', kind:'player'},
+  {key:'sog',          label:'Shots on Goal', kind:'player', group:'Player props'},
   {key:'points',       label:'Points',        kind:'player'},
   {key:'goals',        label:'Goals',         kind:'player'},
   {key:'assists',      label:'Assists',       kind:'player'},
   {key:'ppp',          label:'PP Points',     kind:'player'},
-  {key:'total_goals',  label:'Total Goals',   kind:'game'},
+  // Trends (order 2, Oct 2026): track records beside the boards, never in the scores
+  {key:'sog_lines',    label:'SOG Lines',     kind:'player', trend:true, group:'Trends'},
+  {key:'multi_point',  label:'2+ Points',     kind:'player', trend:true},
+  {key:'multi_goal',   label:'Multi-Goal',    kind:'player', trend:true},
+  {key:'streaks',      label:'Streaks',       kind:'player', trend:true},
+  {key:'h2h',          label:'Head-to-Head',  kind:'player', trend:true},
+  {key:'dvp',          label:'DvP',           kind:'dvp'},
+  {key:'total_goals',  label:'Total Goals',   kind:'game', group:'Games and teams'},
   {key:'moneyline',    label:'Moneyline',     kind:'game'},
   {key:'puck_line',    label:'Puck Line',     kind:'game'},
   {key:'team_goals',   label:'Team Goals',    kind:'game'},
@@ -471,7 +483,7 @@ const PROPS = [
   {key:'team_sog',     label:'Team SOG',      kind:'game'},
   {key:'game_ppg',     label:'Game PPG',      kind:'game'},
   {key:'team_ppg',     label:'Team PPG',      kind:'game'},
-  {key:'team_stats',   label:'Team Stats',    kind:'teams'},
+  {key:'team_stats',   label:'Team Stats',    kind:'teams', group:'Reference'},
   {key:'goalies',      label:'Goalies',       kind:'goalies'},
   {key:'out',          label:'Out Tonight',   kind:'out'},
 ];
@@ -738,6 +750,7 @@ const SOURCES = {
   player:  () => ['prop_picks', {prop:`eq.${current}`, order:'rank.asc'}],
   game:    () => ['game_picks', {prop:`eq.${current}`, order:'rank.asc'}],
   teams:   () => ['team_stats', {order:'power_rank.asc'}],
+  dvp:     () => ['team_stats', {order:'team.asc'}],
   goalies: () => ['goalie_starts', {order:'team.asc'}, 'game_date'],
   out:     () => ['player_status', {order:'base_toi.desc'}, 'game_date'],
 };
@@ -823,9 +836,12 @@ const EXTRA_COLS = {
     ['SOG/60', 'shots60', num1],
     ['Opp SOG Allowed (pos)', 'opp_sa_pos', num1],
     ['Dangerous Shots/G', 'hd_pg', num2],
+    ['Safe Line', 'safe_sog'],
+    ['Aggressive Line', 'aggressive_sog'],
   ],
   goals: [
     ['Goals L10', 'goals_recent'],
+    ['Anytime L10', 'goal1_l10'],
     ['Goals/60', 'goals60', num2],
     ['Sh% (adj)', 'sh_pct', pctF],
     ['xG/60', 'ixg60', num2],
@@ -838,6 +854,7 @@ const EXTRA_COLS = {
   ],
   assists: [
     ['Assists L10', 'assists_recent'],
+    ['1+ Ast L10', 'ast1_l10'],
     ['Ast/60', 'assists60', num2],
     ['PP TOI', 'pp_toi_recent', mins],
     ['Team GF/G', 'team_gf', num2],
@@ -846,6 +863,8 @@ const EXTRA_COLS = {
   ],
   points: [
     ['Pts/G L10', 'points_pg_recent', num2],
+    ['1+ Pts L10', 'pts1_l10'],
+    ['2+ Pts L10', 'pts2_l10'],
     ['Pts/60', 'points60', num2],
     ['xG/60', 'ixg60', num2],
     ['PP TOI', 'pp_toi_recent', mins],
@@ -950,6 +969,43 @@ const EXTRA_COLS = {
     ['Goalie Check', 'goalie_check'],
   ],
 };
+// Trend tabs: plain track records ("8/10" = cleared in 8 of the last 10 games).
+const int0 = v => v == null || v === '' ? '' : String(Math.round(+v));
+Object.assign(EXTRA_COLS, {
+  sog_lines: [
+    ['Safe Line', 'safe_sog'], ['Aggressive Line', 'aggressive_sog'],
+    ['1+ L10', 'sog1_l10'], ['2+ L10', 'sog2_l10'], ['3+ L10', 'sog3_l10'], ['4+ L10', 'sog4_l10'],
+    ['2+ L20', 'sog2_l20'], ['3+ L20', 'sog3_l20'],
+    ['2+ Season', 'sog2_season'], ['3+ Season', 'sog3_season'], ['Season', 'season_basis'],
+    ['Opp SOG Allowed (pos)', 'opp_sa_pos', num1],
+  ],
+  multi_point: [
+    ['1+ Pts L10', 'pts1_l10'], ['2+ Pts L10', 'pts2_l10'], ['2+ Pts L20', 'pts2_l20'],
+    ['2+ Pts Season', 'pts2_season'], ['Season', 'season_basis'],
+    ['Pts/G L10', 'points_pg_recent', num2], ['PP TOI', 'pp_toi_recent', mins],
+    ['Goalie Check', 'goalie_check'],
+  ],
+  multi_goal: [
+    ['Anytime L10', 'goal1_l10'], ['Anytime L20', 'goal1_l20'], ['2+ Goals L20', 'goal2_l20'],
+    ['2+ Goals Season', 'goal2_season'], ['2+ Goals Last Season', 'goal2_last_season'],
+    ['Season', 'season_basis'], ['xG/60', 'ixg60', num2],
+    ['Dangerous Shots/G', 'hd_pg', num2], ['Goalie Check', 'goalie_check'],
+  ],
+  streaks: [
+    ['Form', 'form'], ['Point Streak', 'point_streak', int0], ['Goal Streak', 'goal_streak', int0],
+    ['3+ SOG Streak', 'sog3_streak', int0], ['No Point In', 'pointless', int0],
+    ['No Goal In', 'goalless', int0],
+    ['Pts/G L5', 'pts_l5', num2], ['Pts/G Season', 'pts_season', num2],
+    ['SOG/G L5', 'sog_l5', num2], ['SOG/G Season', 'sog_season', num2],
+    ['Season', 'season_basis'],
+  ],
+  h2h: [
+    ["Vs Tonight's Opponent", 'h2h_summary'], ['GP', 'h2h_gp', int0], ['1+ Pts', 'h2h_pts1'],
+    ['G', 'h2h_goals', int0], ['A', 'h2h_assists', int0], ['P', 'h2h_points', int0],
+    ['SOG/G', 'h2h_sog_pg', num2], ['Since', 'h2h_seasons'], ['Opp DvP', 'dvp_note'],
+  ],
+});
+
 // Shown on every player board after the prop columns: the add-on, made visible.
 const PLAYER_TAIL = [
   ['TOI L10', 'toi_recent', mins],
@@ -995,9 +1051,26 @@ function rawValue(r, key){
 
 function columnsFor(){
   const kind = PROPS.find(p=>p.key===current).kind;
+  const trend = !!PROPS.find(p=>p.key===current).trend;
   const why = C('Why', r=>r.rationale, null, {cls:'why'});
   const score = (key='score') => C('Score', r=>r[key], null,
     {html: r=>`<td class="score ${scoreClass(r[key])}">${r[key] ?? ''}</td>`});
+
+  if (kind === 'dvp') {
+    // value with its rank among 32 teams (#1 = allows the most), sorted by the value
+    const vr = (k) => (v, r) => v == null ? '' :
+      `${(+v).toFixed(2)}${rawValue(r, k + '_rank') != null ? ` (#${rawValue(r, k + '_rank')})` : ''}`;
+    const cols = [C('Team', r=>r.team, null, {cls:'name'}),
+                  C('GP', r=>rawValue(r, 'dvp_gp_season'))];
+    for (const [pg, name] of [['C','C'], ['W','W'], ['D','D']])
+      for (const [s, lab] of [['sog','SOG'], ['pts','Pts'], ['g','G']]) {
+        const k = `dvp_${pg}_${s}_season`, l = `dvp_${pg}_${s}_l10`, p = `dvp_${pg}_${s}_last`;
+        cols.push(C(`${name} ${lab}/G`, r=>rawValue(r, k), vr(k)));
+        cols.push(C(`${name} ${lab} L10`, r=>rawValue(r, l), v=>num2(v), {cls:'num l10', hcls:'l10'}));
+        cols.push(C(`${name} ${lab} Last Season`, r=>rawValue(r, p), vr(p), {cls:'num l10', hcls:'l10'}));
+      }
+    return cols;
+  }
 
   if (kind === 'teams') return [
     C('Power #', r=>r.power_rank, null, {cls:'rank', asc:true}),
@@ -1057,7 +1130,8 @@ function columnsFor(){
     fromKey('Pos', 'position'),
     C('Team', r=>r.team),
     C('Opp', r=>r.opponent),
-    score(),
+    trend ? C('Board Score', r=>r.score, null,
+        {html: r=>`<td class="score ${scoreClass(r.score)}">${r.score ?? ''}</td>`}) : score(),
     C('Lineup', r=>r.lineup_status, null, {html: r=>`<td>${r.lineup_status === 'confirmed'
       ? '<span class="badge b-conf">confirmed</span>'
       : '<span class="badge b-proj">projected</span>'}</td>`}),
@@ -1065,8 +1139,8 @@ function columnsFor(){
       {html: r=>{ const g = (r.details||{}).recent_games;
         return `<td class="num ${g != null && g < 7 ? 'thin' : ''}">${g != null ? g+' G' : '—'}</td>`; }}),
     ...extra,
-    ...PLAYER_TAIL.map(([l, k, f]) => fromKey(l, k, f)),
-    why];
+    // trend tabs are track records: no ice-time tail and no Why (it lives on the board)
+    ...(trend ? [] : [...PLAYER_TAIL.map(([l, k, f]) => fromKey(l, k, f)), why])];
 }
 
 const cellText = (c, r) => { const v = c.get(r);
@@ -1126,8 +1200,9 @@ function render(){
     `<tr style="--i:${Math.min(i,26)}">${cols.map(c => c.html ? c.html(r)
       : `<td class="${c.cls}">${esc(cellText(c, r))}</td>`).join('')}</tr>`).join('');
 
-  $('#empty').textContent = kind === 'out'
-    ? 'No regulars are out for this slate.' : 'Nothing to show for this slate yet.';
+  $('#empty').textContent = kind === 'out' ? 'No regulars are out for this slate.'
+    : current === 'h2h' ? 'No head-to-head history for tonight\'s matchups yet.'
+    : 'Nothing to show for this slate yet.';
   $('#empty').classList.toggle('hidden', data.length > 0);
 
   const more = $('#more');
@@ -1241,6 +1316,7 @@ async function init(){
   }
 
   $('#tabs').innerHTML = PROPS.map(p=>
+    (p.group ? `<span class="tabgroup">${esc(p.group)}</span>` : '') +
     `<div class="tab${p.key===current?' on':''}" data-k="${p.key}">${p.label}</div>`).join('');
   $('#tabs').addEventListener('click', e=>{
     const t = e.target.closest('.tab'); if(!t) return;
