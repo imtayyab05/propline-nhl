@@ -45,9 +45,8 @@ How each is scored (what we told him):
 - Team stats tab replaces what he used MoneyPuck for: goals, SOG, PPG, PP%, points —
   for and against, season and recent side by side — plus a power ranking.
 
-**Delivery plan (Tayyab, 5 Oct):** Devin has NOT been shown Phase 1. Tayyab will deliver
-Phase 1 + Phase 2 together as one Fiverr delivery, before ~21 Oct. Until then, never
-draft client messages that mention the live site or link to it.
+**Delivery plan (Tayyab, 5 Oct) - DONE:** Phase 1 + 2 were delivered together on 7 Oct.
+The site is now the client's; messages may link to it.
 
 **Client decisions and wishes (4 Oct, before seeing anything):**
 - Market lines: GAME LINES ONLY (ML, puck line, total, team totals) on the free Odds
@@ -79,7 +78,8 @@ book's terms (1+/2+ points, anytime/2+ goals, 1+ assists). Promised free alongsi
 (Tayyab's 8 Oct reply): back-to-back penalty measured from last season, home and road
 separately; a warning on picks that depend on a "lean" goalie.
 
-Order 2 status (8 Oct): BUILT and live (propline/trends.py; tabs SOG Lines, 2+ Points,
+Order 2 DELIVERED 8 Oct 2026 (guide v2 PDF attached; first CI runs with the trend code
+passed 7-8 Oct, goalies confirmed live). Order 2 status (8 Oct): BUILT and live (propline/trends.py; tabs SOG Lines, 2+ Points,
 Multi-Goal, Streaks, Head-to-Head, DvP). Backtest on 14,508 player-games since 1 Mar
 2026: safe line cleared next game 77%, aggressive 47%; 3+ two-point games in last 10
 -> 2+ points next game 24% (vs 5% with none). Those figures are a check of the METHOD
