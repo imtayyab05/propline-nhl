@@ -64,6 +64,12 @@ def team_table(team_logs: pd.DataFrame, teams: pd.DataFrame, season: int,
         ps = _summarise(p)
         row = {"team": team, **s}
         row.update({f"l10_{k}": v for k, v in l10.items() if k != "points"})
+        # L5 / L3 (16 Oct 2026): display only, and blank until this season has that
+        # many games - a 2-game "last 3" would read as a trend and is just noise.
+        for w in (5, 3):
+            if len(c) >= w:
+                lw = _summarise(c.tail(w))
+                row.update({f"l{w}_{k}": v for k, v in lw.items() if k != "points"})
 
         gp = s.get("gp", 0)
         wc = gp / (gp + PRIOR_GP) if ps.get("gp") else 1.0

@@ -202,3 +202,10 @@ Still open:
   runs do not draw on that pool), Netlify credits
   (300/month across all sites on the team), and Groq (same key as MLB, confirmed 2 Oct 2026).
   Odds is NOT shared: separate accounts, like Supabase.
+
+**Free tweak (16 Oct 2026): L5 / L3 columns** beside every L10 column (player boards,
+trend tabs, game/team boards beside the season numbers, Team Stats) on the site and in
+Excel. DISPLAY ONLY - no weight reads them. Blank until the window is full. One rule in
+`propline/recent.py`, mirrored as `withRecent` in web/index.html. Team Stats L5/L3 ride
+in `details` (team_stats table has only l10 columns). Streaks' goals-per-game keys were
+renamed `gls_l5` / `gls_season` because `goals_l5` is now the L5 goal total.

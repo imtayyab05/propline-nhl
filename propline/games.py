@@ -222,6 +222,12 @@ def team_context(schedule, team_tbl, starters, quality, absences,
                 "back_to_back": bool(b2b.get(team)), "missing_toi": round(missing, 1),
                 "missing_names": ab["missing_names"].get(team, "") if "missing_names" in ab else "",
                 "strength": strength,
+                # L5 / L3 for display only (16 Oct 2026); none of these is weighted
+                **{f"{who}l{w}_{k}": (t.at[src, f"l{w}_{col}"] if f"l{w}_{col}" in t else None)
+                   for who, src in (("", team), ("opp_", opp))
+                   for w in (5, 3)
+                   for k, col in (("gf", "gf_pg"), ("ga", "ga_pg"), ("sf", "sf_pg"),
+                                  ("sa", "sa_pg"), ("ppg", "ppg_pg"), ("pp_pct", "pp_pct"))},
             })
     return pd.DataFrame(rows)
 

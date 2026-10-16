@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .recent import with_recent
+
 HEAD = [
     ("rank", "#"),
     ("player_name", "Player"),
@@ -118,7 +120,7 @@ TREND_MIDDLE = {
         ("goalless", "Games Without a Goal"),
         ("pts_l5", "Pts/G L5"), ("pts_season", "Pts/G Season"),
         ("sog_l5", "SOG/G L5"), ("sog_season", "SOG/G Season"),
-        ("goals_l5", "Goals/G L5"), ("goals_season", "Goals/G Season"),
+        ("gls_l5", "Goals/G L5"), ("gls_season", "Goals/G Season"),
         ("season_basis", "Season"),
     ],
     "h2h": [
@@ -246,9 +248,10 @@ OUT_COLS = [
 
 def columns_for(prop: str):
     # trend tabs are track records: no ice-time tail and no Why column
+    # L5 / L3 sit right after every L10 column (16 Oct 2026), display only
     if prop in TREND_MIDDLE:
-        return HEAD + PROP_MIDDLE[prop]
-    return HEAD + PROP_MIDDLE.get(prop, []) + TAIL
+        return with_recent(HEAD + PROP_MIDDLE[prop])
+    return with_recent(HEAD + PROP_MIDDLE.get(prop, []) + TAIL)
 
 
 def _shape(df: pd.DataFrame, spec, top_n=None) -> pd.DataFrame:
@@ -278,11 +281,11 @@ def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
                 xl, sheet_name=title, index=False)
 
         # slate-wide tabs are never truncated
-        boards = [(total_goals, TOTAL_GOALS_COLS, "Total Goals")]
+        boards = [(total_goals, with_recent(TOTAL_GOALS_COLS), "Total Goals")]
         for prop, (title, spec) in BOARD_SHEETS.items():
-            boards.append(((game_boards or {}).get(prop), spec, title))
+            boards.append(((game_boards or {}).get(prop), with_recent(spec), title))
         for frame, spec, title in (*boards,
-                                   (team_tbl, TEAM_COLS, "Team Stats"),
+                                   (team_tbl, with_recent(TEAM_COLS), "Team Stats"),
                                    (team_tbl, DVP_COLS, "DvP"),
                                    (starters, GOALIE_COLS, "Goalies"),
                                    (outs, OUT_COLS, "Out Tonight")):

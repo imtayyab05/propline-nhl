@@ -309,6 +309,10 @@ def team_xg_table(cur_tg: pd.DataFrame, prev_teams: pd.DataFrame, team_logs: pd.
                      hdf_pg=g["hdf"].mean(), hda_pg=g["hda"].mean(),
                      l10_xgf_pg=g["xgf"].tail(RECENT).mean(),
                      l10_xga_pg=g["xga"].tail(RECENT).mean())
+            for w in (5, 3):          # display only; blank until the window is full
+                if gp >= w:
+                    r[f"l{w}_xgf_pg"] = g["xgf"].tail(w).mean()
+                    r[f"l{w}_xga_pg"] = g["xga"].tail(w).mean()
         p = prev.loc[tid] if tid in prev.index else None
         wc = gp / (gp + TEAM_PRIOR_GP) if p is not None else 1.0
         for k in ("xgf", "xga", "hdf", "hda"):

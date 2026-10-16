@@ -148,6 +148,19 @@ def player_rates(skater_logs: pd.DataFrame, season: int, prev_season: int,
         assists_recent=("assists", "sum"), ppp_recent=("pp_points", "sum"),
         last_game=("game_date", "max"))
     out = out.join(r, how="left")
+
+    # L5 / L3 (client ask, 16 Oct 2026): DISPLAY ONLY - no weight reads these; three
+    # games is too small a sample to rank on. A window is blank until the player has
+    # that many games logged, so a 2-game "L3" is never shown as if it were three.
+    for w in (5, 3):
+        lw = logs.groupby("player_id").tail(w)
+        a = lw.groupby("player_id").agg(
+            n=("toi", "size"), toi=("toi", "mean"), pp_toi=("pp_toi", "mean"),
+            sog_pg=("shots", "mean"), points_pg=("points", "mean"),
+            goals=("goals", "sum"), assists=("assists", "sum"), ppp=("pp_points", "sum"))
+        full = a["n"] >= w
+        for c in ("toi", "pp_toi", "sog_pg", "points_pg", "goals", "assists", "ppp"):
+            out[f"{c}_l{w}"] = a[c].where(full)
     out["games_total"] = logs.groupby("player_id").size()
     out["gp_season"] = cur_gp.reindex(out.index).fillna(0).astype(int)
     out.index.name = "player_id"
@@ -227,6 +240,9 @@ def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
     lg = {c: team_tbl[c].mean() for c in ("ga_pg_b", "gf_pg_b", "pen_taken_pg_b",
                                           "pk_pct_b")}
     df["opp_ga"] = df["opponent"].map(t["ga_pg_b"])
+    for w in (5, 3):              # display only (16 Oct 2026)
+        if f"l{w}_ga_pg" in t:
+            df[f"opp_l{w}_ga"] = df["opponent"].map(t[f"l{w}_ga_pg"])
     if "xga_pg_b" in t:
         df["opp_xga"] = df["opponent"].map(t["xga_pg_b"])
     df["team_gf"] = df["team"].map(t["gf_pg_b"])
@@ -311,6 +327,9 @@ def score_total_goals(schedule, team_tbl, starters, quality, absences) -> pd.Dat
             "home_xgf_pg": t.at[h, "xgf_pg_b"] if "xgf_pg_b" in t else None,
             "away_xgf_pg": t.at[a, "xgf_pg_b"] if "xgf_pg_b" in t else None,
             "home_gf_pg": t.at[h, "gf_pg_b"], "away_gf_pg": t.at[a, "gf_pg_b"],
+            # L5 / L3, display only (16 Oct 2026)
+            **{f"{side}_l{w}_{k}_pg": (t.at[tm, f"l{w}_{k}_pg"] if f"l{w}_{k}_pg" in t else None)
+               for side, tm in (("home", h), ("away", a)) for w in (5, 3) for k in ("gf", "ga")},
             "home_ga_pg": t.at[h, "ga_pg_b"], "away_ga_pg": t.at[a, "ga_pg_b"],
             "home_goalie": hg.get("name"), "away_goalie": ag.get("name"),
             "home_goalie_sv": hg.get("sv"), "away_goalie_sv": ag.get("sv"),

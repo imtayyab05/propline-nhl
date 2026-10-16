@@ -9,6 +9,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .db import check_json, delete_where, read, upsert
+from .recent import expand_keys, recent_keys
 
 # Stored alongside each pick so the dashboard can show the "why" without recomputing.
 # Per prop, matching the Excel tabs. The internal exp_* signals are NOT published.
@@ -39,8 +40,8 @@ PROP_DETAIL.update({
                    "goal2_last_season", "goal2_count", "season_basis", "ixg60", "hd_pg",
                    "goalie_check"],
     "streaks": ["form", "point_streak", "goal_streak", "sog3_streak", "pointless",
-                "goalless", "pts_l5", "pts_season", "sog_l5", "sog_season", "goals_l5",
-                "goals_season", "season_basis"],
+                "goalless", "pts_l5", "pts_season", "sog_l5", "sog_season", "gls_l5",
+                "gls_season", "season_basis"],
     "h2h": ["h2h_summary", "h2h_gp", "h2h_goals", "h2h_assists", "h2h_points",
             "h2h_pts1", "h2h_sog_pg", "h2h_seasons", "dvp_note"],
 })
@@ -97,6 +98,17 @@ INT_COLS = {
     "goalie_id", "backup_id", "rank", "power_rank", "gp", "l10_gp", "points",
     "starts_recent", "games_missed", "game_type", "price", "books",
 }
+
+
+# L5 / L3 (16 Oct 2026): every detail list carries the L5 / L3 neighbours of its L10
+# (and, on game boards, season) keys. Team Stats' L10 values are real table columns;
+# their L5 / L3 ride in details so no schema change is needed.
+PROP_DETAIL = {k: expand_keys(v) for k, v in PROP_DETAIL.items()}
+COMMON_DETAIL = expand_keys(COMMON_DETAIL)
+GAME_DETAIL = expand_keys(GAME_DETAIL)
+BOARD_DETAIL = {k: expand_keys(v) for k, v in BOARD_DETAIL.items()}
+TEAM_DETAIL = TEAM_DETAIL + [k for c in TEAM_COLS for k in recent_keys(c)] + [
+    f"l{w}_{k}" for w in (5, 3) for k in ("xgf_pg", "xga_pg", "gp")]
 
 
 def _ints(df: pd.DataFrame) -> pd.DataFrame:

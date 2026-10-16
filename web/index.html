@@ -1044,6 +1044,31 @@ const fromKey = (label, key, fmt) => key === 'goalie_check'
       return `<td>${v ? `<span class="badge b-lean">${esc(v)}</span>` : ''}</td>`; }})
   : C(label, r=>rawValue(r, key), fmt ? v=>fmt(v) : undefined);
 
+// L5 / L3 beside every L10 column (client ask, 16 Oct 2026). Display only: no score
+// reads them, and the pipeline leaves a window blank until it is full. Same rule as
+// propline/recent.py, so the site and the Excel file show the same columns.
+const SEASON_TO_RECENT = {
+  opp_ga: 'opp_l{w}_ga', pp_pct: 'l{w}_pp_pct', ppg: 'l{w}_ppg',
+  away_sf: 'away_l{w}_sf', away_sa: 'away_l{w}_sa', home_sf: 'home_l{w}_sf', home_sa: 'home_l{w}_sa',
+  away_pp_pct: 'away_l{w}_pp_pct', home_pp_pct: 'home_l{w}_pp_pct',
+  away_gf_pg: 'away_l{w}_gf_pg', away_ga_pg: 'away_l{w}_ga_pg',
+  home_gf_pg: 'home_l{w}_gf_pg', home_ga_pg: 'home_l{w}_ga_pg',
+};
+function recentKey(key, w){
+  if (key.endsWith('_recent')) return key.slice(0, -7) + '_l' + w;
+  if (key.endsWith('_l10')) return key.slice(0, -4) + '_l' + w;
+  if (key.startsWith('l10_')) return 'l' + w + '_' + key.slice(4);
+  if (key.includes('_l10_')) return key.replace('_l10_', '_l' + w + '_');
+  if (SEASON_TO_RECENT[key]) return SEASON_TO_RECENT[key].replace('{w}', w);
+  return null;
+}
+const recentLabel = (l, w) => l.includes('L10') ? l.replace('L10', 'L' + w) : l + ' L' + w;
+const withRecent = spec => spec.flatMap(([l, k, f]) => [[l, k, f],
+  ...[5, 3].filter(w => recentKey(k, w)).map(w => [recentLabel(l, w), recentKey(k, w), f, true])]);
+const fromSpec = ([l, k, f, recent]) => recent
+  ? C(l, r=>rawValue(r, k), f ? v=>f(v) : undefined, {cls:'num l10', hcls:'l10'})
+  : fromKey(l, k, f);
+
 function rawValue(r, key){
   const d = r.details || {};
   return r[key] !== undefined ? r[key] : d[key];
@@ -1083,7 +1108,8 @@ function columnsFor(){
     C('Pts%', r=>r.points_pct, v=>pctF(v)),
     ...TEAM_PAIRS.flatMap(([l, k, f]) => [
       C(l, r=>rawValue(r, k), v=>f(v)),
-      C(l+' L10', r=>rawValue(r, 'l10_'+k), v=>f(v), {cls:'num l10', hcls:'l10'})]),
+      ...['10', '5', '3'].map(w =>
+        C(`${l} L${w}`, r=>rawValue(r, `l${w}_${k}`), v=>f(v), {cls:'num l10', hcls:'l10'}))]),
     C('L10 Record', r=>r.l10_record, null, {cls:'num l10'}),
   ];
 
@@ -1112,7 +1138,7 @@ function columnsFor(){
     C('Source', r=>r.status_source, v=>ROSTER_SRC[v] ?? v ?? ''),
   ];
 
-  const extra = (EXTRA_COLS[current] || []).map(([l, k, f]) => fromKey(l, k, f));
+  const extra = withRecent(EXTRA_COLS[current] || []).map(fromSpec);
   const rank = C('#', r=>r.rank, null, {cls:'rank', asc:true});
 
   if (kind === 'game') {
@@ -1140,7 +1166,7 @@ function columnsFor(){
         return `<td class="num ${g != null && g < 7 ? 'thin' : ''}">${g != null ? g+' G' : '—'}</td>`; }}),
     ...extra,
     // trend tabs are track records: no ice-time tail and no Why (it lives on the board)
-    ...(trend ? [] : [...PLAYER_TAIL.map(([l, k, f]) => fromKey(l, k, f)), why])];
+    ...(trend ? [] : [...withRecent(PLAYER_TAIL).map(fromSpec), why])];
 }
 
 const cellText = (c, r) => { const v = c.get(r);
@@ -1154,6 +1180,8 @@ function sortKey(v){
   if (typeof v === 'boolean') return v ? 1 : 0;
   if (typeof v === 'number') return v;
   const s = String(v).trim();
+  const fr = s.match(/^(\d+)\/(\d+)$/);
+  if (fr) return +fr[2] ? fr[1] / fr[2] : null;
   const n = Number(s.replace(/[%,]/g, ''));
   return Number.isNaN(n) ? s.toLowerCase() : n;
 }

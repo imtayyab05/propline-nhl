@@ -118,14 +118,24 @@ def player_trends(players: pd.DataFrame, logs: pd.DataFrame, history: pd.DataFra
                          else f"too few games ({len(l10)})")
         r["aggressive_sog"] = f"{aggr}+ ({a_hit}/{a_n})" if aggr else None
         r["safe_level"], r["aggressive_level"] = safe, aggr
+        l3 = shots[-3:]
         for k in (1, 2, 3, 4):
             r[f"sog{k}_l10"] = f"{_count(l10, k)}/{len(l10)}"
+            # L5 / L3 (16 Oct 2026): blank until he has that many games
+            r[f"sog{k}_l5"] = f"{_count(l5, k)}/5" if len(l5) == 5 else None
+            r[f"sog{k}_l3"] = f"{_count(l3, k)}/3" if len(l3) == 3 else None
             r[f"sog{k}_l20"] = f"{_count(l20, k)}/{len(l20)}"
             r[f"sog{k}_season"] = f"{_count(list(sea['shots']), k)}/{len(sea)}"
 
         # --- points, goals, assists in his book's terms ------------------------------
         r["pts1_l10"] = f"{_count(pts[-10:], 1)}/{len(pts[-10:])}"
         r["pts2_l10"] = f"{_count(pts[-10:], 2)}/{len(pts[-10:])}"
+        for w in (5, 3):
+            if len(pts) >= w:
+                r[f"pts1_l{w}"] = f"{_count(pts[-w:], 1)}/{w}"
+                r[f"pts2_l{w}"] = f"{_count(pts[-w:], 2)}/{w}"
+                r[f"goal1_l{w}"] = f"{_count(goals[-w:], 1)}/{w}"
+                r[f"ast1_l{w}"] = f"{_count(ast[-w:], 1)}/{w}"
         r["pts2_l20"] = f"{_count(pts[-20:], 2)}/{len(pts[-20:])}"
         r["pts2_season"] = f"{_count(list(sea['points']), 2)}/{len(sea)}"
         r["pts2_count_l20"] = _count(pts[-20:], 2)
@@ -147,7 +157,7 @@ def player_trends(players: pd.DataFrame, logs: pd.DataFrame, history: pd.DataFra
         r["goalless"] = _drought(goals)
         sea_n = len(sea)
         for name, vals, col in (("pts", pts, "points"), ("sog", shots, "shots"),
-                                ("goals", goals, "goals")):
+                                ("gls", goals, "goals")):   # not "goals": goals_l5 is the L5 total
             l5v = vals[-5:]
             r[f"{name}_l5"] = _rate(l5v, len(l5v))
             r[f"{name}_season"] = _rate(list(sea[col]), sea_n)
@@ -179,9 +189,9 @@ def _form(r: dict) -> str:
         notes.append(f"goal in {r['goal_streak']} straight")
     if r["sog3_streak"] >= 4:
         notes.append(f"3+ SOG in {r['sog3_streak']} straight")
-    for name, label in (("pts", "pts"), ("sog", "SOG"), ("goals", "goals")):
+    for name, label in (("pts", "pts"), ("sog", "SOG"), ("gls", "goals")):
         l5, sea = r.get(f"{name}_l5"), r.get(f"{name}_season")
-        floor = {"pts": 0.5, "sog": 2.0, "goals": 0.25}[name]
+        floor = {"pts": 0.5, "sog": 2.0, "gls": 0.25}[name]
         if l5 is None or not sea or sea < floor:
             continue
         if l5 >= HOT * sea:
@@ -190,7 +200,7 @@ def _form(r: dict) -> str:
             notes.append(f"cold: {l5} {label}/g last 5 vs {sea} season")
     if r["pointless"] >= 4 and (r.get("pts_season") or 0) >= 0.6:
         notes.append(f"no point in {r['pointless']}")
-    if r["goalless"] >= 8 and (r.get("goals_season") or 0) >= 0.3:
+    if r["goalless"] >= 8 and (r.get("gls_season") or 0) >= 0.3:
         notes.append(f"no goal in {r['goalless']}")
     return "; ".join(notes)
 
