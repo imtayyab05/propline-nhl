@@ -207,6 +207,8 @@
   .b-err{background:rgba(255,107,107,.15);color:var(--bad)}
   /* a lean goalie projection: a real guess, not a scratch, so no strike-through */
   .b-lean{background:rgba(255,122,89,.15);color:var(--hot)}
+  .b-over{background:rgba(62,207,142,.18);color:var(--good)}
+  .b-under{background:rgba(78,161,255,.18);color:var(--accent)}
 
   button,select,input{font:inherit;color:var(--text);background:var(--panel2);
         border:1px solid var(--line);border-radius:9px;padding:8px 12px;
@@ -893,7 +895,10 @@ const EXTRA_COLS = {
     ['SV%', 'home_goalie_sv', sv3],
     ['Regulars Out', 'missing_names'],
     ['Combined xG/G', 'combined_xg', num2],
+    // projection + lean (19 Oct 2026): a direction only, never a probability
+    ['Projected Total', 'proj_total', num1],
     ['Market Total', 'market_total'],
+    ['Model Lean', 'model_lean'],
     ['Over', 'over_price', ml],
     ['Under', 'under_price', ml],
     ['Goalie Check', 'goalie_check'],
@@ -931,6 +936,8 @@ const EXTRA_COLS = {
     ['Goalie Faced', 'opp_goalie'],
     ['SV%', 'opp_goalie_sv', sv3],
     ['GF/G L10', 'l10_gf', num2],
+    ['Projected Goals', 'proj_goals', num1],
+    ['Team Total Tag', 'tt_tag'],
     ['Market Team Total', 'market_team_total'],
     ['Over', 'tt_over_price', ml],
     ['Under', 'tt_under_price', ml],
@@ -1037,7 +1044,16 @@ const ROSTER_SRC = {game_roster:"tonight's game roster", recent_games:'recent ga
    plain text shown and exported · html(row) = optional richer cell (badges) ·
    cls = cell class · asc = first click sorts low-to-high (ranks). */
 const C = (label, get, fmt, extra={}) => ({label, get, fmt, cls:'num', ...extra});
-const fromKey = (label, key, fmt) => key === 'goalie_check'
+// Model lean / team-total tag (19 Oct 2026): green for over, blue for under. A
+// direction only, never a probability; blank when the gap is small, there is no market
+// total, or a goalie involved is only a "lean".
+const LEAN_KEYS = new Set(['model_lean', 'tt_tag']);
+const leanBadge = (label, key) => C(label, r=>rawValue(r, key), null, {html: r=>{
+  const v = rawValue(r, key);
+  const cls = !v ? '' : /UNDER/.test(v) ? 'b-under' : 'b-over';
+  return `<td>${v ? `<span class="badge ${cls}">${esc(v)}</span>` : ''}</td>`; }});
+const fromKey = (label, key, fmt) => LEAN_KEYS.has(key) ? leanBadge(label, key)
+  : key === 'goalie_check'
   // A pick that leans on a goalie we only have as "lean": amber, so it reads as "check
   // your book before betting". Empty when every goalie involved is firm or confirmed.
   ? C(label, r=>rawValue(r, key), null, {html: r=>{ const v = rawValue(r, key);

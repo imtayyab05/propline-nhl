@@ -157,7 +157,11 @@ TOTAL_GOALS_COLS = [
     ("combined_pp_threat", "PP Threat Index"),
     ("missing_names", "Regulars Out"),
     ("combined_xg", "Combined xG/G"),
-    ("market_total", "Market Total"), ("over_price", "Over"), ("under_price", "Under"),
+    # projection + lean (19 Oct 2026): readability only, no score reads them
+    ("proj_total", "Projected Total"),
+    ("market_total", "Market Total"), ("model_lean", "Model Lean"),
+    ("proj_vs_market", "Proj - Market"),
+    ("over_price", "Over"), ("under_price", "Under"),
     ("rationale", "Why"),
 ]
 
@@ -185,6 +189,7 @@ BOARD_SHEETS = {
         ("opp_xga", "Opp xGA/G"), ("opp_goalie", "Goalie Faced"),
         ("opp_goalie_sv", "Its SV% (adj)"), ("goalie_check", "Goalie Check"),
         ("l10_gf", "GF/G L10"),
+        ("proj_goals", "Projected Goals"), ("tt_tag", "Team Total Tag"),
         ("market_team_total", "Market Team Total"), ("tt_over_price", "Over"),
         ("tt_under_price", "Under"), ("missing_names", "Regulars Out"),
         ("rationale", "Why")]),
@@ -254,6 +259,23 @@ def columns_for(prop: str):
     return with_recent(HEAD + PROP_MIDDLE.get(prop, []) + TAIL)
 
 
+LEAN_FILL = {"OVER": "C6EFCE", "UNDER": "CFE2F3"}     # green / blue, as on the site
+
+
+def _colour_leans(ws) -> None:
+    from openpyxl.styles import PatternFill
+    head = {c.value: c.column for c in ws[1]}
+    for label in ("Model Lean", "Team Total Tag"):
+        col = head.get(label)
+        if not col:
+            continue
+        for row in ws.iter_rows(min_row=2, min_col=col, max_col=col):
+            v = str(row[0].value or "")
+            side = "UNDER" if "UNDER" in v else "OVER" if ("OVER" in v or "Over" in v) else None
+            if side:
+                row[0].fill = PatternFill("solid", fgColor=LEAN_FILL[side])
+
+
 def _shape(df: pd.DataFrame, spec, top_n=None) -> pd.DataFrame:
     cols = [(src, label) for src, label in spec if src in df.columns]
     out = df[[src for src, _ in cols]].copy()
@@ -294,6 +316,7 @@ def build_picks_workbook(player_scores, total_goals, team_tbl, starters, outs,
 
         for ws in xl.book.worksheets:
             ws.freeze_panes = "A2"
+            _colour_leans(ws)
             for col in ws.columns:
                 width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
                 ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 7), 46)

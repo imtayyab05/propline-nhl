@@ -27,7 +27,7 @@ from propline.trends import (attach_dvp, build_trend_boards, dvp_table,  # noqa:
 from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
                             player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
-from propline import odds  # noqa: E402
+from propline import odds, projection  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
 from propline.publish import (previous_rationales, publish_lines,  # noqa: E402
                               publish_slate, read_lines)
@@ -293,6 +293,17 @@ def main() -> int:
         if not lines.empty:
             lines = lines.drop_duplicates(["game_id", "market", "subject", "side"])
         game_boards, total_goals = odds.attach(game_boards, total_goals, lines)
+        # projected goals + model lean: readability only, no score reads them
+        total_goals, game_boards, calib = projection.project(
+            total_goals, game_boards, team_tbl, team_logs, season, prev, day,
+            quality.attrs.get("league_sv_pct", 0.900))
+        total_goals, game_boards = projection.add_leans(total_goals, game_boards)
+        lean = total_goals.get("model_lean", pd.Series(dtype=object))
+        tags = game_boards.get("team_goals", pd.DataFrame()).get("tt_tag", pd.Series(dtype=object))
+        print(f"  ok    projections: league {calib['target']:.2f} goals/team-game "
+              f"({calib['cur_games']} team-games), K {calib['k']:.3f}, home edge "
+              f"{calib['home_edge']:+.2f}; leans {int((lean == 'MODEL LEAN: OVER').sum())} over / "
+              f"{int((lean == 'MODEL LEAN: UNDER').sum())} under, {int(tags.notna().sum())} team tags")
         with_ml = int(game_boards.get("moneyline", pd.DataFrame()).get(
             "pick_ml", pd.Series(dtype=float)).notna().sum())
         print(f"  {'ok  ' if with_ml else 'WARN'}  market lines: {odds_note}; "

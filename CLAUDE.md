@@ -209,3 +209,13 @@ Excel. DISPLAY ONLY - no weight reads them. Blank until the window is full. One 
 `propline/recent.py`, mirrored as `withRecent` in web/index.html. Team Stats L5/L3 ride
 in `details` (team_stats table has only l10 columns). Streaks' goals-per-game keys were
 renamed `gls_l5` / `gls_season` because `goals_l5` is now the L5 goal total.
+
+**Free tweak (19 Oct 2026): projected goals + model lean** (`propline/projection.py`).
+Readability only - no score reads it. Team goals = K x (half GF + half xGF on the goals
+scale) x (half opp GA + half opp xGA x goalie factor) / league GF, +/- half the measured
+home edge; K calibrated each run so the league-average projection = this season's actual
+goals per team-game. Total Goals: "MODEL LEAN: OVER/UNDER" when |proj - market| >= 0.4.
+Team Goals: "Team Total Over 2.5 / 3.5" when proj >= line + 0.75. Both blank when any
+goalie involved is a "lean" (or missing) or there is no market total. Backtest 8-19 Oct,
+85 games: mean proj 6.16 vs market 6.12, above 45 / below 38. Direction only, never a %.
+Note: scripts/collect.py logs a pipeline_runs row even without --publish.
