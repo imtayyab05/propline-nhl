@@ -145,3 +145,13 @@ jobs:
           RATIONALE: ${{ steps.cfg.outputs.rationale }}
           ODDS: ${{ steps.cfg.outputs.odds }}
         run: python scripts/process.py --date "$DATE" --run-kind "$KIND" --publish --odds "$ODDS" $RATIONALE
+
+      # Results page: grade every finished slate that has a pre-puck-drop snapshot and no
+      # results yet (normally last night's). Morning slot only; it catches up on any
+      # slate a failed morning missed. Runs after the publish, so a grading failure can
+      # never cost the day's board. Free: NHL feed only, no odds credits, no Groq.
+      - name: Grade finished slates
+        if: steps.cfg.outputs.kind == 'scheduled_morning'
+        env:
+          KIND: ${{ steps.cfg.outputs.kind }}
+        run: python scripts/grade.py --run-kind "$KIND"

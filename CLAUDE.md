@@ -218,4 +218,14 @@ goals per team-game. Total Goals: "MODEL LEAN: OVER/UNDER" when |proj - market| 
 Team Goals: "Team Total Over 2.5 / 3.5" when proj >= line + 0.75. Both blank when any
 goalie involved is a "lean" (or missing) or there is no market total. Backtest 8-19 Oct,
 85 games: mean proj 6.16 vs market 6.12, above 45 / below 38. Direction only, never a %.
-Note: scripts/collect.py logs a pipeline_runs row even without --publish.
+Note: scripts/collect.py logs a pipeline_runs row even without --publish (the 19 Oct
+backtest left 13 such rows; deleted the same day).
+
+**Order 3: Results / Track Record page — paid, due 1 Nov 2026** (`propline/results.py`,
+`scripts/grade.py`, `web/results.html`, tables in `db/results.sql`). Every publish
+freezes the picks of games NOT yet started into `pick_snapshots` (a DB trigger refuses
+writes once a game's start time passes); the morning slot runs grade.py on finished
+slates -> `pick_results`. Found 22 Oct: nothing in the pipeline skips started games, so
+the late run (01:37 UTC) re-ranks them with post-start info -> stored past boards are
+NOT fairly gradable; the record starts from go-live. Grading rules in results.py
+docstring. Hit rates only, never ROI. `grade.py --test-from-boards` = test, never writes.

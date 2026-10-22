@@ -27,7 +27,7 @@ from propline.trends import (attach_dvp, build_trend_boards, dvp_table,  # noqa:
 from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
                             player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
-from propline import odds, projection  # noqa: E402
+from propline import odds, projection, results  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
 from propline.publish import (previous_rationales, publish_lines,  # noqa: E402
                               publish_slate, read_lines)
@@ -381,6 +381,18 @@ def main() -> int:
                                     total_goals, team_tbl,
                                     top_n=args.publish_top or None,
                                     game_boards=game_boards)
+            # Results page: freeze every game that has not started at its current
+            # picks; started games keep the snapshot from their last pre-start run.
+            # A failure here must not cost the board, so it is reported, not raised.
+            try:
+                snap, open_ids = results.snapshot_rows(
+                    day, schedule, player_scores, total_goals, game_boards, args.run_kind)
+                n = results.freeze(day, snap, open_ids)
+                written["pick_snapshots"] = (f"{n} ({len(open_ids)}/{len(schedule)} games "
+                                             "not started)")
+            except Exception as exc:  # noqa: BLE001
+                written["pick_snapshots"] = f"FAILED {str(exc)[:120]}"
+                print(f"  WARN  pick snapshot failed: {exc}")
             for table, n in written.items():
                 print(f"  ok    {table:16} {n} rows")
             try:

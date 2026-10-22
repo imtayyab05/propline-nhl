@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PropLine NHL — Track Record</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141a26; --panel2:#1b2230; --line:#252e3f;
+    --text:#e9eef7; --muted:#8b99ae; --dim:#5d6b80;
+    --accent:#4ea1ff; --accent2:#7c8cff;
+    --good:#3ecf8e; --warn:#f5b942; --bad:#ff6b6b;
+    --radius:12px; --ease:cubic-bezier(.16,1,.3,1);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  header{background:rgba(20,26,38,.88);backdrop-filter:blur(14px);
+         border-bottom:1px solid var(--line);padding:12px 16px;position:sticky;top:0;z-index:20}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .brand{font-size:19px;font-weight:800;letter-spacing:-.2px;color:var(--text);text-decoration:none}
+  .brand span{background:linear-gradient(90deg,var(--accent),var(--accent2));
+              -webkit-background-clip:text;background-clip:text;color:transparent}
+  .spacer{flex:1}
+  .meta{font-size:13px;color:var(--muted)}
+  a.navlink{color:var(--text);text-decoration:none;font-size:14px;padding:8px 12px;
+            border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
+  a.navlink:hover{border-color:var(--accent)}
+  main{padding:18px 16px 40px;max-width:1300px;margin:0 auto}
+  h1{font-size:22px;margin:4px 0 6px;letter-spacing:-.01em}
+  h2{font-size:16px;margin:28px 0 10px;color:var(--muted);text-transform:uppercase;
+     letter-spacing:.08em;font-weight:700}
+  .lede{color:var(--muted);font-size:14px;max-width:880px;margin:0 0 14px}
+  .tabs{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 14px}
+  .tab{padding:8px 15px;border-radius:9px;background:var(--panel);border:1px solid var(--line);
+       cursor:pointer;font-size:14px;color:var(--text)}
+  .tab.on{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;
+          color:#fff;font-weight:700}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  button,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);
+                border-radius:9px;padding:8px 12px}
+  button{cursor:pointer}
+  button:hover,select:focus{border-color:var(--accent);outline:none}
+  .wrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:var(--panel2);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
+     color:var(--muted);font-weight:700;position:sticky;top:0;cursor:pointer;user-select:none}
+  th:hover{color:var(--text)}
+  th.sorted{color:var(--accent)}
+  th .arr{margin-left:5px;font-size:.75em}
+  tbody tr:hover{background:var(--panel2)}
+  tbody tr:last-child td{border-bottom:none}
+  td.num{font-variant-numeric:tabular-nums}
+  td.dim{color:var(--muted)}
+  .rate{font-weight:800;font-variant-numeric:tabular-nums}
+  .up{color:var(--good)} .down{color:var(--bad)} .flat{color:var(--muted)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;font-weight:700;
+         text-transform:uppercase;letter-spacing:.4px}
+  .b-hit{background:rgba(62,207,142,.16);color:var(--good)}
+  .b-miss{background:rgba(255,107,107,.14);color:var(--bad)}
+  .b-void{background:rgba(139,153,174,.16);color:var(--muted)}
+  .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+  .hidden{display:none}
+  .rules{color:var(--muted);font-size:13.5px;max-width:900px}
+  .rules li{margin:3px 0}
+  footer{padding:24px 16px;color:var(--dim);font-size:13px;max-width:1300px;margin:0 auto}
+  @media (max-width:640px){
+    th,td{padding:8px 9px;font-size:13px}
+    h1{font-size:19px}
+    /* board names wrap so the hit and base rates stay on screen */
+    #sumBody td:first-child{white-space:normal;min-width:104px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <a class="brand" href="/">Prop<span>Line</span> NHL</a>
+    <div class="meta">Track Record</div>
+    <div class="spacer"></div>
+    <a class="navlink" href="/#board">Back to the boards</a>
+  </div>
+</header>
+
+<script src="config.local.js" onerror="void 0"></script>
+
+<main>
+  <h1>Track record</h1>
+  <p class="lede">How often each board's picks hit, beside the base rate for everyone that
+    board listed that night. Each game's picks are <b>frozen at the last update before its
+    puck drop</b> and graded the next morning against the official final box score, so
+    nothing here was ranked with information from a game already under way. Scores are
+    0-100 percentile ratings within each night's slate; these hit rates are a record of
+    the boards, not a prediction and not betting advice.</p>
+
+  <div class="meta" id="status">loading…</div>
+
+  <h2>Hit rate by board</h2>
+  <div class="tabs" id="windows"></div>
+  <div class="controls">
+    <div class="meta" id="wininfo"></div>
+    <div class="spacer"></div>
+    <button id="csvSummary">Download CSV</button>
+  </div>
+  <div class="wrap">
+    <table><thead id="sumHead"></thead><tbody id="sumBody"></tbody></table>
+    <div class="empty hidden" id="sumEmpty"></div>
+  </div>
+
+  <h2>Graded picks, day by day</h2>
+  <div class="controls">
+    <select id="fDate"></select>
+    <select id="fBoard"><option value="">All boards</option></select>
+    <select id="fResult">
+      <option value="">Any result</option>
+      <option value="hit">Hit</option><option value="miss">Miss</option><option value="void">Void</option>
+    </select>
+    <div class="spacer"></div>
+    <span class="meta" id="pickCount"></span>
+    <button id="csvPicks">Download CSV</button>
+  </div>
+  <div class="wrap">
+    <table><thead id="pickHead"></thead><tbody id="pickBody"></tbody></table>
+    <div class="empty hidden" id="pickEmpty">No graded picks for this selection.</div>
+  </div>
+
+  <h2>How picks are graded</h2>
+  <ul class="rules">
+    <li><b>Goals</b>: 1+ goal (anytime). <b>Multi-Goal</b>: 2+ goals, in the Goals board's order.</li>
+    <li><b>Points</b>: 1+ point. <b>2+ Points</b>: 2+ points, in the Points board's order.
+      <b>Assists</b>: 1+ assist. <b>PP Points</b>: 1+ power-play point.</li>
+    <li><b>Shots on goal</b>: each player against the lines his board shows, his safe line and,
+      separately, his aggressive line. Players with no line are not graded.</li>
+    <li>Player props count regulation and overtime; shootout attempts are not goals or shots.
+      A player who did not play is <b>void</b>, not a miss.</li>
+    <li><b>Total Goals</b>: only games that showed a MODEL LEAN badge, graded on that side of
+      the market total. <b>Team Goals</b>: tagged teams against their tag (Over 2.5 / 3.5),
+      and every team with a market team total against that line (over).
+      <b>Moneyline</b>: the stronger side won. <b>Puck Line</b>: the stronger side covered
+      its puck line. All of these use the final score including overtime and the shootout
+      (the shootout winner is credited one goal, as in the official score). A result exactly
+      on the line is a push, and a postponed game is void.</li>
+    <li><b>Top 5 / 10 / 25</b> are the highest-scored picks on that board each night.
+      <b>Base rate</b> is the same outcome across everyone the board listed (for example the
+      share of all listed skaters who scored); for moneyline and puck line it is how the
+      market favourite did, for the leans how often games went that side of the line.</li>
+    <li>Not graded: Streaks, Head-to-Head and DvP (information tabs), and the SOG and PPG
+      game and team boards, which no book offers a line for.</li>
+  </ul>
+</main>
+<footer>PropLine NHL · hit rates are a track record of percentile rankings, never a probability.</footer>
+
+<script>
+const LABELS = {
+  goals:'Goals (anytime)', multi_goal:'Multi-Goal (2+)', points:'Points (1+)',
+  multi_point:'2+ Points', assists:'Assists (1+)', ppp:'PP Points (1+)',
+  sog_safe:'SOG — safe line', sog_aggressive:'SOG — aggressive line',
+  total_goals:'Total Goals — model lean', team_goals_tag:'Team Goals — tag',
+  team_goals_total:'Team Goals — over market', moneyline:'Moneyline — stronger side',
+  puck_line:'Puck Line — covered',
+};
+const ORDER = Object.keys(LABELS);
+const PLAYER = new Set(['goals','multi_goal','points','multi_point','assists','ppp','sog_safe','sog_aggressive']);
+const RANKED = new Set(['team_goals_total','moneyline','puck_line']);
+const WINDOWS = [{k:'7', label:'Last 7 days', days:7}, {k:'30', label:'Last 30 days', days:30},
+                 {k:'season', label:'Season', days:null}];
+
+let CFG = null, ALL = [], win = '30', sumRows = [];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = v => v == null || isNaN(v) ? '—' : `${Math.round(v*100)}%`;
+
+async function loadConfig(){
+  if (window.PROPLINE_CONFIG) return window.PROPLINE_CONFIG;
+  const r = await fetch('/api/config');
+  if (!r.ok) throw new Error('No config.');
+  return r.json();
+}
+async function sbAll(table, params){
+  // PostgREST stops at 1,000 rows a request: page until a short page comes back.
+  let out = [], off = 0;
+  for (;;) {
+    const url = new URL(`${CFG.supabaseUrl}/rest/v1/${table}`);
+    Object.entries({...params, limit:1000, offset:off}).forEach(([k,v]) => url.searchParams.set(k,v));
+    const r = await fetch(url, {headers:{apikey:CFG.supabaseAnonKey,
+                                         Authorization:`Bearer ${CFG.supabaseAnonKey}`}});
+    if (!r.ok) throw new Error(`${table}: ${r.status}`);
+    const page = await r.json();
+    out = out.concat(page);
+    if (page.length < 1000) return out;
+    off += 1000;
+  }
+}
+
+function todayET(){
+  return new Intl.DateTimeFormat('en-CA', {timeZone:'America/New_York'}).format(new Date());
+}
+function minusDays(iso, n){
+  const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/* ── summary ───────────────────────────────────────────────────────────── */
+function summarise(rows){
+  const out = [];
+  const by = {};
+  rows.filter(r => r.result !== 'void').forEach(r => (by[r.board] ||= []).push(r));
+  for (const b of ORDER) {
+    const g = by[b]; if (!g) continue;
+    const cuts = PLAYER.has(b) ? [5,10,25].map(n => [`Top ${n}`, g.filter(r => r.rank <= n)])
+               : RANKED.has(b) ? [...[5,10].map(n => [`Top ${n}`, g.filter(r => r.rank <= n)]), ['All', g]]
+               : [['All', g]];
+    for (const [bucket, c] of cuts) {
+      if (!c.length) continue;
+      const hits = c.filter(r => r.result === 'hit').length;
+      const bases = c.map(r => r.base_p).filter(v => v != null);
+      const base = bases.length ? bases.reduce((a,b)=>a+(+b),0) / bases.length : null;
+      out.push({board:LABELS[b], key:b, bucket, picks:c.length, hits,
+                rate:hits / c.length, base, diff: base == null ? null : hits / c.length - base,
+                order: ORDER.indexOf(b)*10 + ['Top 5','Top 10','Top 25','All'].indexOf(bucket)});
+    }
+  }
+  return out;
+}
+
+const SUM_COLS = [
+  {label:'Board', get:r=>r.order, show:r=>esc(r.board)},
+  {label:'Picks', get:r=>r.order, show:r=>esc(r.bucket)},
+  // the two rates sit right after the board, so a phone shows them without scrolling
+  {label:'Hit rate', get:r=>r.rate, show:r=>`<span class="rate">${pct(r.rate)}</span>`, num:true},
+  {label:'Base rate', get:r=>r.base, show:r=>pct(r.base), num:true, dim:true},
+  {label:'vs base', get:r=>r.diff, show:r=>r.diff == null ? '—' :
+     `<span class="${r.diff > 0.005 ? 'up' : r.diff < -0.005 ? 'down' : 'flat'}">${r.diff > 0 ? '+' : ''}${Math.round(r.diff*100)} pts</span>`, num:true},
+  {label:'Hits', get:r=>r.picks, show:r=>`${r.hits}/${r.picks}`, num:true, dim:true},
+];
+const PICK_COLS = [
+  {label:'Date', get:r=>r.slate_date, show:r=>r.slate_date},
+  {label:'Board', get:r=>ORDER.indexOf(r.board), show:r=>esc(LABELS[r.board] || r.board)},
+  {label:'#', get:r=>r.rank, show:r=>r.rank, num:true, asc:true},
+  {label:'Pick', get:r=>r.subject_name || r.subject, show:r=>`<b>${esc(r.subject_name || r.subject)}</b>`},
+  {label:'Team', get:r=>r.team, show:r=>esc(r.team)},
+  {label:'Opp', get:r=>r.opponent, show:r=>esc(r.opponent)},
+  {label:'Graded on', get:r=>r.pick, show:r=>esc(r.pick)},
+  {label:'Actual', get:r=>r.actual, show:r=>esc(r.actual_text ?? (r.actual ?? '')), num:true},
+  {label:'Result', get:r=>({hit:2, miss:1, void:0})[r.result],
+   show:r=>`<span class="badge b-${r.result}">${r.result}</span>${r.note ? ` <span class="meta">${esc(r.note)}</span>` : ''}`},
+  {label:'Score', get:r=>r.score, show:r=>r.score ?? '', num:true, dim:true},
+  {label:'Frozen at', get:r=>r.frozen_at, show:r=>r.frozen_at ? esc(`${r.run_type || ''} ${String(r.frozen_at).slice(11,16)} UTC`) : '', dim:true},
+];
+
+/* sortable tables: one column list drives header, cells, sort and CSV */
+function sortKey(v){ return v == null || v === '' ? null : (typeof v === 'number' ? v : (isNaN(+v) ? String(v).toLowerCase() : +v)); }
+function sorted(rows, col, dir){
+  if (!col) return rows;
+  return rows.map((r,i)=>({r,i,k:sortKey(col.get(r))})).sort((a,b)=>{
+    if (a.k === null || b.k === null) return (a.k === null) - (b.k === null) || a.i - b.i;
+    const c = typeof a.k === 'number' && typeof b.k === 'number' ? a.k - b.k : String(a.k).localeCompare(String(b.k));
+    return c * dir || a.i - b.i;
+  }).map(x=>x.r);
+}
+function makeTable(head, body, cols, state, rows){
+  head.innerHTML = '<tr>' + cols.map((c,i)=>`<th data-i="${i}" class="${state.col===c?'sorted':''}">${esc(c.label)}${state.col===c?`<span class="arr">${state.dir>0?'▲':'▼'}</span>`:''}</th>`).join('') + '</tr>';
+  body.innerHTML = sorted(rows, state.col, state.dir).map(r => '<tr>' + cols.map(c =>
+    `<td class="${c.num?'num':''} ${c.dim?'dim':''}">${c.show(r)}</td>`).join('') + '</tr>').join('');
+  head.querySelectorAll('th').forEach(th => th.onclick = () => {
+    const c = cols[+th.dataset.i];
+    if (state.col === c) state.dir = -state.dir; else { state.col = c; state.dir = c.asc || !c.num ? 1 : -1; }
+    state.render();
+  });
+}
+function csv(cols, rows, name){
+  const text = s => String(s ?? '').replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+  const q = v => /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+  const lines = [cols.map(c=>q(c.label)).join(',')].concat(rows.map(r => cols.map(c => q(text(c.show(r)))).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], {type:'text/csv'}));
+  a.download = name; a.click();
+}
+
+const sumState = {col:null, dir:1, render: renderSummary};
+const pickState = {col:null, dir:1, render: renderPicks};
+
+function windowRows(){
+  const w = WINDOWS.find(x => x.k === win);
+  if (!w.days) return ALL;
+  const from = minusDays(todayET(), w.days);
+  return ALL.filter(r => r.slate_date >= from);
+}
+function renderSummary(){
+  $('#windows').innerHTML = WINDOWS.map(w => `<button class="tab ${w.k===win?'on':''}" data-k="${w.k}">${w.label}</button>`).join('');
+  $('#windows').querySelectorAll('.tab').forEach(b => b.onclick = () => { win = b.dataset.k; renderSummary(); });
+  const rows = windowRows();
+  const dates = [...new Set(rows.map(r=>r.slate_date))].sort();
+  $('#wininfo').textContent = dates.length ? `${dates.length} graded slate${dates.length>1?'s':''}, ${dates[0]} to ${dates.at(-1)}` : '';
+  sumRows = summarise(rows);
+  $('#sumEmpty').classList.toggle('hidden', !!sumRows.length);
+  $('#sumEmpty').textContent = ALL.length ? 'Nothing graded in this window yet.' :
+    'No graded slates yet. Each night\'s picks are frozen before puck drop and graded the next morning.';
+  makeTable($('#sumHead'), $('#sumBody'), SUM_COLS, sumState, sumRows);
+}
+function pickRows(){
+  const d = $('#fDate').value, b = $('#fBoard').value, res = $('#fResult').value;
+  return ALL.filter(r => (!d || r.slate_date === d) && (!b || r.board === b) && (!res || r.result === res));
+}
+function renderPicks(){
+  const rows = pickRows();
+  $('#pickEmpty').classList.toggle('hidden', !!rows.length);
+  $('#pickCount').textContent = `${rows.length} pick${rows.length===1?'':'s'}`;
+  makeTable($('#pickHead'), $('#pickBody'), PICK_COLS, pickState, rows);
+}
+
+async function init(){
+  try {
+    CFG = await loadConfig();
+    ALL = await sbAll('pick_results', {select:'*', order:'slate_date.desc,board.asc,rank.asc'});
+  } catch (e) {
+    ALL = null;                      // a failed load must not read as "nothing graded"
+    $('#status').textContent = `Could not load results (${e.message}). Try again shortly.`;
+    $('#sumEmpty').textContent = 'Results could not be loaded.';
+    $('#sumEmpty').classList.remove('hidden');
+    return;
+  }
+  const dates = [...new Set(ALL.map(r=>r.slate_date))].sort().reverse();
+  $('#status').textContent = dates.length
+    ? `Last graded slate: ${dates[0]} · record starts ${dates.at(-1)}`
+    : 'No graded slates yet.';
+  $('#fDate').innerHTML = '<option value="">All dates</option>' + dates.map(d=>`<option>${d}</option>`).join('');
+  if (dates.length) $('#fDate').value = dates[0];
+  const boards = ORDER.filter(b => ALL.some(r => r.board === b));
+  $('#fBoard').innerHTML += boards.map(b => `<option value="${b}">${esc(LABELS[b])}</option>`).join('');
+  ['#fDate','#fBoard','#fResult'].forEach(s => $(s).onchange = renderPicks);
+  $('#csvSummary').onclick = () => csv(SUM_COLS, sorted(sumRows, sumState.col, sumState.dir), `propline-nhl-hit-rates-${win}.csv`);
+  $('#csvPicks').onclick = () => csv(PICK_COLS, sorted(pickRows(), pickState.col, pickState.dir), 'propline-nhl-graded-picks.csv');
+  renderSummary();
+  renderPicks();
+}
+init();
+</script>
+</body>
+</html>
