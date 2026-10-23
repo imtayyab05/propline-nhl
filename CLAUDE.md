@@ -229,3 +229,8 @@ slates -> `pick_results`. Found 22 Oct: nothing in the pipeline skips started ga
 the late run (01:37 UTC) re-ranks them with post-start info -> stored past boards are
 NOT fairly gradable; the record starts from go-live. Grading rules in results.py
 docstring. Hit rates only, never ROI. `grade.py --test-from-boards` = test, never writes.
+Status 23 Oct: db/results.sql run by Tayyab 23 Oct; first freeze verified (local run, 2/2
+games, trigger refuses writes to started games). Record starts with the 23 Oct slate;
+first grading on the 24 Oct morning slot. NETLIFY CREDITS ARE EXHAUSTED UNTIL 29 OCT:
+results.html and the dashboard link (commit d2e8e9c) are not deployed; do NOT push until
+then (a push attempts a build). Local commits waiting to push: healthcheck Results section.
