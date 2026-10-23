@@ -57,7 +57,7 @@ EXPLAIN_TOP = 10                    # process.py --explain-top default (player b
 BOARD_EXPLAIN_TOP = 5               # process.py BOARD_EXPLAIN_TOP (other game boards)
 GROQ_SLOTS = {"scheduled_morning", "scheduled_pregame"}     # daily.yml EXPLAIN
 
-TABLES = ["prop_picks", "game_picks", "team_stats", "market_lines", "goalie_starts",
+TABLES = ["prop_picks", "game_picks", "pick_snapshots", "pick_results", "team_stats", "market_lines", "goalie_starts",
           "player_status", "games", "players", "pipeline_runs"]
 FREE_DB_MB = 500
 FREE_STORAGE_MB = 1024
@@ -231,6 +231,31 @@ def odds_quota() -> tuple[int | None, int | None]:
     return (int(float(rem)) if rem else None, int(float(used)) if used else None)
 
 
+def results_status(a: dict, latest: dict | None) -> dict:
+    """Track Record page: were tonight's games frozen before puck drop, and were the
+    finished slates graded? Counted against slates that had a freeze to grade."""
+    out = {"ok": True}
+    try:
+        snap_dates = sorted({r["slate_date"] for r in read_all(
+            "pick_snapshots", {"select": "slate_date", "board": "eq.moneyline",
+                               "slate_date": f"gte.{a['since']}"})})
+        graded = sorted({r["slate_date"] for r in read_all(
+            "pick_results", {"select": "slate_date", "slate_date": f"gte.{a['since']}"})})
+    except Exception as exc:  # noqa: BLE001 - tables missing until db/results.sql is run
+        return {"ok": False, "error": str(exc)[:90]}
+    today = datetime.now(timezone.utc).date().isoformat()
+    due = [d for d in snap_dates if d < today]
+    out.update(frozen=snap_dates, graded=graded, due=due,
+               ungraded=[d for d in due if d not in graded],
+               grading_failed=[r for r in a["runs"] if r["stage"] == "grading"
+                               and r["status"] != "ok"])
+    if latest:
+        g = read("pick_snapshots", {"select": "game_id", "slate_date": f"eq.{latest['date']}",
+                                    "board": "eq.moneyline"})
+        out["latest_frozen"] = len({x["game_id"] for x in g})
+    return out
+
+
 def storage() -> dict:
     """Row counts per table, a rough size from a sample of each table's rows, and the
     workbook bucket's real size. PostgREST cannot read pg_database_size, so the exact
@@ -339,6 +364,21 @@ def main() -> int:
                   "(fewer books post these)")
         else:
             print("                    team totals: pulled on the pre-game run, not yet run")
+
+    R = results_status(a, L)
+    print("\nRESULTS PAGE  (picks frozen before puck drop, graded next morning)")
+    if not R["ok"]:
+        print(f"  NOT SET UP        {R['error']}  <-- run db/results.sql in Supabase")
+    else:
+        if L:
+            print(f"  latest slate      {R.get('latest_frozen', 0)} of {L['games']} games frozen")
+        print(f"  slates graded     {len([d for d in R['due'] if d in R['graded']])} of "
+              f"{len(R['due'])} finished slates with a freeze"
+              + (f"  <-- not graded: {', '.join(R['ungraded'])}" if R["ungraded"] else ""))
+        if R["graded"]:
+            print(f"  record            {R['graded'][0]} to {R['graded'][-1]}")
+        if R["grading_failed"]:
+            print(f"  grading failures  {len(R['grading_failed'])}")
 
     print("\nQUOTAS")
     rem, used = odds_quota()
