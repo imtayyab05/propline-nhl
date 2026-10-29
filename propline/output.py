@@ -31,6 +31,7 @@ TAIL = [
     ("toi_bump", "+TOI (absences)"),
     ("bump_from", "Minutes From"),
     ("opp_missing", "Opp Missing"),
+    ("check_note", "Status Check"),        # left his last game early (29 Oct 2026)
     ("rationale", "Why"),
 ]
 
@@ -255,7 +256,8 @@ def columns_for(prop: str):
     # trend tabs are track records: no ice-time tail and no Why column
     # L5 / L3 sit right after every L10 column (16 Oct 2026), display only
     if prop in TREND_MIDDLE:
-        return with_recent(HEAD + PROP_MIDDLE[prop])
+        # the early-exit warning shows on the trend tabs too (they share the rank)
+        return with_recent(HEAD + PROP_MIDDLE[prop] + [("check_note", "Status Check")])
     return with_recent(HEAD + PROP_MIDDLE.get(prop, []) + TAIL)
 
 

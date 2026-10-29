@@ -1024,6 +1024,8 @@ const PLAYER_TAIL = [
   ['+TOI', 'toi_bump', plus],
   ['Minutes From', 'bump_from'],
   ['Opp Missing', 'opp_missing'],
+  // left his last game early (29 Oct 2026): amber, and kept out of the Top 25
+  ['Status Check', 'check_note'],
 ];
 
 // Team tab: season number with its last-10 partner right beside it.
@@ -1058,7 +1060,7 @@ const leanBadge = (label, key) => C(label, r=>rawValue(r, key), null, {html: r=>
   const cls = !v ? '' : /UNDER/.test(v) ? 'b-under' : 'b-over';
   return `<td>${v ? `<span class="badge ${cls}">${esc(v)}</span>` : ''}</td>`; }});
 const fromKey = (label, key, fmt) => LEAN_KEYS.has(key) ? leanBadge(label, key)
-  : key === 'goalie_check'
+  : key === 'goalie_check' || key === 'check_note'
   // A pick that leans on a goalie we only have as "lean": amber, so it reads as "check
   // your book before betting". Empty when every goalie involved is firm or confirmed.
   ? C(label, r=>rawValue(r, key), null, {html: r=>{ const v = rawValue(r, key);
@@ -1187,7 +1189,9 @@ function columnsFor(){
         return `<td class="num ${g != null && g < 7 ? 'thin' : ''}">${g != null ? g+' G' : '—'}</td>`; }}),
     ...extra,
     // trend tabs are track records: no ice-time tail and no Why (it lives on the board)
-    ...(trend ? [] : [...withRecent(PLAYER_TAIL).map(fromSpec), why])];
+    // the early-exit warning still shows there, because the tab shares the board's rank
+    ...(trend ? [fromKey('Status Check', 'check_note')]
+              : [...withRecent(PLAYER_TAIL).map(fromSpec), why])];
 }
 
 const cellText = (c, r) => { const v = c.get(r);

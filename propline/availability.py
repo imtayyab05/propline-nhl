@@ -11,6 +11,15 @@ Sources, official feed only:
 Known blind spot, flagged rather than hidden: a player hurt in practice today is not
 known until the game roster posts. Until then he is scored as playing.
 
+Early exit (29 Oct 2026, after Marchenko on 28 Oct): a regular whose LAST game's ice time
+was under half his normal is flagged "left last game early, check status". He is not
+marked OUT (most come back, some do not), but the boards drop him out of their Top 25
+until tonight's FINAL game roster has him dressed. Measured on 4,744 regular player-games
+this season: 22 such games, and the player missed his team's next game in 19 (86%),
+against 10% for regulars in general. At 60% the rule flagged 42, of which only 25 missed
+the next game, so 50% it is. A game with 10+ PIM (ejection) is not an injury and is not
+flagged. No free injury feed is usable (see CLAUDE.md), so this is the only early signal.
+
 Minutes redistribution
 ----------------------
 When a regular is out, his ice time does not vanish — the coach hands it to teammates.
@@ -35,10 +44,13 @@ REPLACEMENT_TOI = {"F": 10.0, "D": 15.0}   # what a call-up typically plays
 PP_REGULAR = 1.0                           # PP minutes/game to count as on the PP
 MAX_BUMP = 4.0                             # cap on extra minutes any one player gets
 DRESSED_PER_TEAM = 20                      # 18 skaters + 2 goalies: a trimmed, final list
+EARLY_EXIT_SHARE = 0.5                     # last game's TOI below this share of normal
+EARLY_EXIT_MIN_GAMES = 5                   # games behind "normal" before the rule applies
+EJECTION_PIM = 10                          # a misconduct, not an injury
 
 AVAIL_COLS = ["team", "player_id", "player_name", "pos_group", "position", "base_toi",
               "base_pp_toi", "regular", "games_missed", "status", "status_source",
-              "reason", "toi_bump", "pp_toi_bump", "bump_from"]
+              "reason", "toi_bump", "pp_toi_bump", "bump_from", "check", "check_note"]
 
 
 def _base_usage(skater_logs: pd.DataFrame, day: str) -> pd.DataFrame:
@@ -49,6 +61,33 @@ def _base_usage(skater_logs: pd.DataFrame, day: str) -> pd.DataFrame:
     return last.groupby("player_id").agg(base_toi=("toi", "mean"),
                                          base_pp_toi=("pp_toi", "mean"),
                                          base_games=("toi", "size"))
+
+
+def _mmss(m: float) -> str:
+    s = int(round(m * 60))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _early_exit(skater_logs: pd.DataFrame, season: int, day: str) -> pd.DataFrame:
+    """Each player's last game this season against his normal ice time BEFORE it."""
+    logs = skater_logs[skater_logs["game_date"] < day].sort_values("game_date")
+    rows = []
+    for pid, g in logs.groupby("player_id"):
+        last = g.iloc[-1]
+        if last["season"] != season:
+            continue
+        prior = g.iloc[:-1].tail(RECENT)
+        if len(prior) < EARLY_EXIT_MIN_GAMES:
+            continue
+        normal = prior["toi"].mean()
+        pim = last.get("pim")
+        rows.append({"player_id": pid, "last_game_id": last["game_id"],
+                     "last_toi": last["toi"], "prior_toi": normal,
+                     "early": bool(last["toi"] < EARLY_EXIT_SHARE * normal
+                                   and not (pim == pim and pim is not None
+                                            and pim >= EJECTION_PIM))})
+    return pd.DataFrame(rows, columns=["player_id", "last_game_id", "last_toi",
+                                       "prior_toi", "early"]).set_index("player_id")
 
 
 def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
@@ -74,7 +113,8 @@ def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
     cur_games = team_logs[(team_logs["season"] == season) & (team_logs["game_date"] < day)]
     cur_sk = skater_logs[(skater_logs["season"] == season) & (skater_logs["game_date"] < day)]
 
-    missed, status, source, reason = [], [], [], []
+    early = _early_exit(skater_logs, season, day)
+    missed, status, source, reason, check, check_note = [], [], [], [], [], []
     for _, p in df.iterrows():
         team_ids = list(cur_games[cur_games["team"] == p["team"]]
                         .sort_values("game_date")["game_id"])
@@ -121,10 +161,25 @@ def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
             reason.append("played last game")
         if on_list and not final:
             reason[-1] += "; on tonight's extended roster (not yet final)"
+
+        # Left his last game early: only for a regular who played that game (an absence
+        # is already OUT), and cleared once tonight's final game roster has him dressed.
+        e = early.loc[p["player_id"]] if p["player_id"] in early.index else None
+        flag = (e is not None and bool(e["early"]) and status[-1] == "in" and not final
+                and e["prior_toi"] >= REGULAR_TOI[p["pos_group"]]
+                and team_ids and e["last_game_id"] == team_ids[-1])
+        check.append(bool(flag))
+        check_note.append(
+            f"Left last game early ({_mmss(e['last_toi'])} of his usual "
+            f"{_mmss(e['prior_toi'])}): check status" if flag else None)
+        if flag:
+            reason[-1] = check_note[-1]
     df["games_missed"] = missed
     df["status"] = status
     df["status_source"] = source
     df["reason"] = reason
+    df["check"] = check
+    df["check_note"] = check_note
 
     return _redistribute(df)
 
@@ -171,6 +226,8 @@ def team_absences(avail: pd.DataFrame) -> pd.DataFrame:
     if avail.empty:
         return pd.DataFrame(columns=cols)
     out = avail[(avail["status"] == "out") & avail["regular"]]
+    # flagged early exits are named (not counted: they may well play)
+    chk = avail[avail["check"].fillna(False).astype(bool)] if "check" in avail else avail.iloc[:0]
     rows = []
     for team in avail["team"].unique():
         o = out[out["team"] == team]
@@ -178,5 +235,8 @@ def team_absences(avail: pd.DataFrame) -> pd.DataFrame:
                      "missing_f_toi": round(o.loc[o.pos_group == "F", "base_toi"].sum(), 1),
                      "missing_d_toi": round(o.loc[o.pos_group == "D", "base_toi"].sum(), 1),
                      "missing_pp_toi": round(o["base_pp_toi"].sum(), 1),
-                     "missing_names": ", ".join(o["player_name"])})
+                     "missing_names": ", ".join(
+                         list(o["player_name"]) +
+                         [f"{n} (left last game early?)"
+                          for n in chk.loc[chk["team"] == team, "player_name"]])})
     return pd.DataFrame(rows, columns=cols)

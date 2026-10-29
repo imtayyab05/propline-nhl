@@ -47,7 +47,7 @@ PROP_DETAIL.update({
 })
 
 COMMON_DETAIL = ["rationale_fp", "position", "recent_games", "gp_season", "toi_recent", "toi_bump",
-                 "bump_from", "opp_missing", "game_id"]
+                 "bump_from", "opp_missing", "game_id", "check_note"]
 
 GAME_DETAIL = ["rationale_fp", "home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg",
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
@@ -269,7 +269,10 @@ def publish_slate(slate_date, schedule, starters, avail, player_scores, total_go
             {"game_date": f"eq.{day}"}, "game_id,team_id")
 
     if avail is not None and not avail.empty:
-        o = avail[(avail["status"] == "out") & avail["regular"]].copy()
+        chk = (avail["check"].fillna(False).astype(bool) if "check" in avail
+               else pd.Series(False, index=avail.index))
+        o = avail[((avail["status"] == "out") & avail["regular"]) | chk].copy()
+        o.loc[chk.loc[o.index], "status"] = "check"
         o["game_date"] = day
         cols = ["game_date", "team", "player_id", "player_name", "position", "base_toi",
                 "games_missed", "status", "status_source", "reason"]

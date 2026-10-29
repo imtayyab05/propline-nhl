@@ -247,7 +247,7 @@ def _chunks(start: date, end: date, days: int = 14):
 SKATER_LOG_COLS = ["player_id", "player_name", "team", "opponent", "home_road",
                    "game_id", "game_date", "season", "position", "goals", "assists",
                    "points", "pp_goals", "pp_points", "shots", "toi", "pp_toi",
-                   "sh_toi", "ev_toi", "shifts"]
+                   "sh_toi", "ev_toi", "shifts", "pim"]
 
 
 def skater_game_logs(season: int, start: date, end: date,
@@ -284,6 +284,8 @@ def skater_game_logs(season: int, start: date, end: date,
         "sh_toi": df["shTimeOnIce"] / 60.0,
         "ev_toi": df["evTimeOnIce"] / 60.0,
         "shifts": df["shifts"],
+        # an ejection cuts a player's minutes without an injury (early-exit flag)
+        "pim": df.get("penaltyMinutes"),
     })
     return out.drop_duplicates(["player_id", "game_id"])[SKATER_LOG_COLS]
 

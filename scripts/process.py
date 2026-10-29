@@ -351,7 +351,14 @@ def main() -> int:
         print(f"  WARN  trends {trend_note}")
 
     print("\n[5/5] Picks workbook")
-    outs = avail[(avail["status"] == "out") & avail["regular"]] if not avail.empty else avail
+    # Out Tonight also lists regulars flagged "left last game early" (status "check")
+    if not avail.empty:
+        chk = (avail["check"].fillna(False).astype(bool) if "check" in avail
+               else pd.Series(False, index=avail.index))
+        outs = avail[((avail["status"] == "out") & avail["regular"]) | chk].copy()
+        outs.loc[chk.loc[outs.index], "status"] = "check"
+    else:
+        outs = avail
     team_tbl, starters, outs = _round(team_tbl), _round(starters), _round(outs)
     confirmed_g = int((starters.get("status") == "confirmed").sum()) if not starters.empty else 0
     run_meta = {

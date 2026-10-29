@@ -235,3 +235,16 @@ first grading on the 24 Oct morning slot. 29 Oct: 23-28 Oct all graded on schedu
 (6 slates, 1,343 picks, 21 voids = did not play), 6,720 frozen rows all before puck drop
 (min 21 min, median 43). Page DEPLOYED 29 Oct and checked live. Order 3 delivered pending
 Tayyab's message to Devin.
+
+**Early-exit flag (29 Oct 2026, after Devin's Marchenko report)** (`propline/availability.py`).
+A regular whose LAST game's TOI < 50% of his prior-10 average (5+ games) is flagged
+`check` with "Left last game early (m:ss of his usual m:ss): check status": shown on every
+player board and trend tab (Status Check), Out Tonight (status "check"), and named in
+Regulars Out / Opp Missing (not counted, no minutes redistributed). Boards keep him out of
+the Top 25 (`scoring.EARLY_EXIT_TOP`; score unchanged) until tonight's FINAL roster has him;
+the Results grader re-ranks the same way. 10+ PIM (ejection) is not flagged; skater logs
+now carry `pim`. Measured on this season: 22 flags at <50%, 19 (86%) missed the next game
+vs 10% base; <60% = 42 flags, 25 missed. Last 2 weeks: 11 flagged, 9 missed next game;
+catches Marchenko (7:05 of 18:10) on 28 Oct. Injury feeds: NHL API has none; ESPN terms
+forbid automated use (rejected 2 Oct); Apify wrappers resell ESPN and charge; Sportradar /
+SportsData.io are paid keys -> no feed. Guide build script now lives in delivery/md2docx.py.

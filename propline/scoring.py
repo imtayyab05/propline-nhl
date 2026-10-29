@@ -199,6 +199,9 @@ def goalie_check(*sides) -> str:
     return ("Not sure to start: " + ", ".join(lean)) if lean else ""
 
 
+EARLY_EXIT_TOP = 25      # a "left last game early" player is kept below this rank
+
+
 def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
                        quality, absences) -> tuple[pd.DataFrame, dict]:
     """Every eligible skater on tonight's slate, scored for all five props.
@@ -287,6 +290,15 @@ def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
         g["prop"] = prop
         g["score"] = _weighted(g, WEIGHTS[prop])
         g["rank"] = g["score"].rank(ascending=False, method="first").astype(int)
+        # Left his last game early (availability.py): kept on the board with a warning,
+        # but out of the Top 25 until tonight's final roster has him. The score is not
+        # touched; only the order moves.
+        if "check" in g:
+            chk = g["check"].fillna(False).astype(bool)
+            demote = chk & (g["rank"] <= EARLY_EXIT_TOP)
+            if demote.any():
+                key = g["rank"] + demote * EARLY_EXIT_TOP
+                g["rank"] = key.rank(method="first").astype(int)
         frames.append(g.sort_values("rank"))
     cov["scored"] = len(df)
     return pd.concat(frames, ignore_index=True), cov

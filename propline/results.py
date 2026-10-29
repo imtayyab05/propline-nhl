@@ -141,13 +141,15 @@ def snapshot_rows(day: str, schedule: pd.DataFrame, player_scores: pd.DataFrame,
             gid = team_game.get(r["team"])
             if gid is None:
                 continue
+            # "check" = left his last game early: the board kept him out of its Top 25
+            chk = bool(r.get("check")) if r.get("check") == r.get("check") else False
             if r["prop"] == "sog":
                 add("sog", gid, r["player_id"], r["player_name"], r["team"], r["opponent"],
                     r["rank"], r["score"], r.get("safe_level"),
-                    {"aggressive": r.get("aggressive_level")})
+                    {"aggressive": r.get("aggressive_level"), "check": chk})
             else:
                 add(r["prop"], gid, r["player_id"], r["player_name"], r["team"],
-                    r["opponent"], r["rank"], r["score"])
+                    r["opponent"], r["rank"], r["score"], extra={"check": chk})
 
     if total_goals is not None and not total_goals.empty:
         for _, r in total_goals.iterrows():
@@ -212,7 +214,14 @@ def _score_text(g: dict) -> str:
 
 def _rerank(df: pd.DataFrame) -> pd.Series:
     order = df.sort_values(["score", "rank"], ascending=[False, True]).index
-    return pd.Series(range(1, len(order) + 1), index=order).reindex(df.index)
+    r = pd.Series(range(1, len(order) + 1), index=order).reindex(df.index)
+    # same rule as the boards (scoring.EARLY_EXIT_TOP): a player flagged "left last game
+    # early" was shown below the Top 25, so he is graded there too
+    chk = df["extra"].apply(lambda x: bool(x.get("check")) if isinstance(x, dict) else False)
+    demote = chk & (r <= 25)
+    if demote.any():
+        r = (r + demote * 25).rank(method="first").astype(int)
+    return r
 
 
 def grade(day: str, snaps: pd.DataFrame, games: dict[int, dict],
