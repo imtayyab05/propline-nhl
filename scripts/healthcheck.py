@@ -38,6 +38,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from propline.db import _creds, env, load_env, read  # noqa: E402
+from propline.waves import WAVES_FROM, plan_waves  # noqa: E402
 
 ODDS_BASE = "https://api.the-odds-api.com/v4"
 BUCKET = "picks"                    # propline/storage.py
@@ -50,6 +51,9 @@ SLOTS = {
     "scheduled_pregame": (0, time(22, 37)),
     "scheduled_late": (1, time(1, 37)),
 }
+# From WAVES_FROM (1 Nov 2026) only the morning and pre-game runs are fixed; the rest are
+# schedule-driven waves (propline/waves.py), expected once per wave the scheduler fires.
+FIXED_FROM_WAVES = ("scheduled_morning", "scheduled_pregame")
 GRACE = timedelta(minutes=45)       # a slot is not "missed" until its run has had time
 
 PLAYER_BOARDS = ["sog", "points", "goals", "assists", "ppp"]
@@ -117,21 +121,42 @@ def automation(days: int, now: datetime) -> dict:
                                    "order": "slate_date.asc", "limit": "1"})
     live_from = date.fromisoformat(first[0]["slate_date"]) if first else None
 
-    # what the scheduler should have run: every slot in the window whose time has passed
-    expected = []
+    # what the scheduler should have run: every slot (and, from WAVES_FROM, every wave)
+    # in the window whose time has passed
+    starts: dict[str, list[datetime]] = {}
+    for g in read_all("games", {"select": "game_date,game_time_utc",
+                                "game_date": f"gte.{since.isoformat()}"}):
+        if g.get("game_time_utc"):
+            starts.setdefault(g["game_date"], []).append(
+                datetime.fromisoformat(g["game_time_utc"].replace("Z", "+00:00")))
+    expected = []                       # (slate, kind, wave or None)
     if live_from:
         d = max(since, live_from)
         while d <= now.date():
-            expected += [(d, k) for k in SLOTS if slot_time(d, k) + GRACE <= now]
+            kinds = FIXED_FROM_WAVES if d >= WAVES_FROM else tuple(SLOTS)
+            expected += [(d, k, None) for k in kinds if slot_time(d, k) + GRACE <= now]
+            if d >= WAVES_FROM:
+                for w in plan_waves(d.isoformat(), starts.get(d.isoformat(), [])):
+                    if not w["skip"] and w["dispatch"] + GRACE <= now:
+                        expected.append((d, "scheduled_wave", w))
             d += timedelta(days=1)
 
     by_slot: dict[tuple, list[dict]] = {}
     for r in runs:
         by_slot.setdefault((r["slate_date"], r["run_type"]), []).append(r)
 
+    def _when(r):
+        s = r.get("started_at")
+        return datetime.fromisoformat(s.replace("Z", "+00:00")) if s else None
+
     done, failed, missing = [], [], []
-    for d, k in expected:
+    for d, k, w in expected:
         rows = by_slot.get((d.isoformat(), k), [])
+        if w is not None:
+            # a wave's run is the one that started between its dispatch and puck drop
+            rows = [r for r in rows if _when(r) and
+                    w["dispatch"] - timedelta(minutes=2) <= _when(r) <= w["anchor"]]
+            k = f"scheduled_wave {w['anchor']:%H:%M}Z"
         proc_ok = any(r["stage"] == "processing" and r["status"] == "ok" for r in rows)
         bad = [r for r in rows if r["status"] != "ok"]
         if proc_ok:
@@ -143,7 +168,7 @@ def automation(days: int, now: datetime) -> dict:
     # a collection logged "partial" (some games' skater data missing) on a slot that
     # still published is a warning, not a failed run
     partial = [r for r in runs if r["status"] == "partial"
-               and r["run_type"] in SLOTS]
+               and (r["run_type"] in SLOTS or r["run_type"] == "scheduled_wave")]
     manual = [r for r in runs if r["run_type"] == "manual" and r["stage"] == "processing"]
     manual_bad = [r for r in runs if r["run_type"] == "manual" and r["status"] != "ok"]
     slates = sorted({r["slate_date"] for r in runs
@@ -297,7 +322,8 @@ def main() -> int:
 
     a = automation(args.days, now)
     exp, done = len(a["expected"]), len(a["done"])
-    print("\nAUTOMATION  (4 scheduled runs a slate)")
+    print("\nAUTOMATION  (morning + pre-game + one run per wave of puck drops;"
+          " 4 fixed slots before 1 Nov)")
     if a["live_from"] and a["live_from"] > a["since"]:
         print(f"  counted from      {a['live_from']} (first scheduled run)")
     print(f"  scheduled runs    {done} of {exp} completed ({pct(done, exp)})")

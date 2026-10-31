@@ -27,8 +27,11 @@ on:
 
 concurrency:
   group: propline-nhl-slate
-  # Two overlapping dispatches produce the same board — cancel rather than pay twice.
-  cancel-in-progress: true
+  # Queue, never cancel (changed 1 Nov 2026 for the wave runs). A wave dispatched while
+  # the pre-game run is writing its Groq text must not kill it; it waits its turn.
+  # GitHub keeps at most one pending run per group (a newer one replaces it), which is
+  # what we want: the latest run is the one that matters. Public repo: no minutes cost.
+  cancel-in-progress: false
 
 jobs:
   slate:
@@ -70,9 +73,12 @@ jobs:
           if [ -z "$DATE" ]; then DATE=$(TZ=America/New_York date +%F); fi
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
-          # Fixed list, so an arbitrary string never becomes a run label.
+          # Fixed list, so an arbitrary string never becomes a run label. scheduled_wave
+          # (1 Nov 2026) is a schedule-driven run 75-90 min before a group of puck drops:
+          # no Groq, no odds (it is in neither list below). midday / late are kept only so
+          # a straggling old dispatch is still labelled.
           case "$IN_KIND" in
-            scheduled_morning|scheduled_midday|scheduled_pregame|scheduled_late)
+            scheduled_morning|scheduled_pregame|scheduled_wave|scheduled_midday|scheduled_late)
               KIND="$IN_KIND" ;;
             *) KIND=manual ;;
           esac

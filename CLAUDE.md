@@ -143,9 +143,19 @@ implications at both ends of the ice. Needs injury/scratch data — see open pro
    (post-game it matched the boxscore exactly). So: NOT on the list = OUT (certain);
    on an extended list = still projected; on a list of <=20 per team = confirmed.
    Known blind spot: a same-day injury is unknown until the list posts.
-3. **Run schedule (set 4 Oct 2026)** — Netlify, UTC, chosen to hold across the 1 Nov
-   US clock change: 12:07 morning (Groq), 17:37 midday, 22:37 pregame (Groq), 01:37
-   late. The workflow dates the slate in US Eastern time so the 01:37 run is "tonight".
+3. **Run schedule (set 4 Oct 2026, changed 31 Oct 2026)** — Netlify, UTC. Fixed: 12:07
+   morning (Groq + odds) and 22:37 pregame (Groq + full odds). The 17:37 midday and 01:37
+   late slots are REPLACED by schedule-driven waves (`netlify/functions/scheduled-waves.mjs`,
+   rule in `netlify/lib/waves.mjs`, Python twin `propline/waves.py`): every 15 min it reads
+   the day's NHL schedule and dispatches `scheduled_wave` (no Groq, no odds) 75-90 min
+   before each group of starts (starts within 30 min share a wave); a wave is skipped when
+   a fixed run already lands 30-90 min before it. Stateless: each wave has exactly one
+   15-min dispatch tick. Workflow concurrency now QUEUES (cancel-in-progress: false) so a
+   wave never kills the Groq pregame run. Health check expects waves from 1 Nov
+   (`WAVES_FROM`); 31 Oct shows the removed 01:37 late slot as never run (changeover).
+   Why: 17:37 was 37 min after a 1pm ET start in EDT and missed 12:30pm starts; Devin had
+   to press Update Now on weekends. Cost: <= ~2,900 ticks/month at < 1 s = < 1 GB-h =
+   under ~10 credits/month at 10 credits/GB-h (one deploy = 15).
 
 Stats API trap: every response is capped at 10,000 rows and `total` then reads 10,000,
 so a capped pull looks complete. `nhl._stats` raises at the cap; skater logs are pulled
