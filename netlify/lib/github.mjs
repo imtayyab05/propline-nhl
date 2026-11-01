@@ -47,6 +47,28 @@ export async function dispatchWorkflow(inputs = {}) {
 }
 
 /**
+ * Is a slate run waiting to start? GitHub keeps at most ONE waiting run per concurrency
+ * group, and a new dispatch cancels it (only runs already in progress are safe). Seen
+ * 1 Nov 2026: an override saved at 16:30 displaced the 16:30 wave that was still queued.
+ * A run that is waiting will read the latest overrides when it starts anyway, so callers
+ * that only need "a fresh run soon" should not dispatch while one is waiting.
+ * Returns null if it cannot tell (then the caller dispatches, as before).
+ */
+export async function waitingRun() {
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO;
+  if (!token || !repo) return null;
+  try {
+    const r = await fetch(`${GITHUB_API}/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=10`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
+                 'X-GitHub-Api-Version': '2022-11-28' } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return (j.workflow_runs || []).some(w => ['queued', 'pending', 'waiting', 'requested'].includes(w.status));
+  } catch { return null; }
+}
+
+/**
  * Only accept values we generate ourselves or can fully validate — these reach a
  * shell step inside the workflow.
  */

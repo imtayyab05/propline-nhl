@@ -19,7 +19,7 @@
 //     schedule and roster; nothing free-form is stored.
 
 import { timingSafeEqual } from 'node:crypto';
-import { dispatchWorkflow } from '../lib/github.mjs';
+import { dispatchWorkflow, waitingRun } from '../lib/github.mjs';
 
 const NHL = 'https://api-web.nhle.com/v1';
 const json = (body, status = 200) => Response.json(body, { status,
@@ -88,6 +88,9 @@ const active = day => sb(`manual_overrides?slate_date=eq.${day}&removed_at=is.nu
                          '&order=set_at.asc');
 
 async function rescore() {
+  // Never displace a waiting run (it could be the Groq pre-game run): it reads the
+  // overrides when it starts, so it already covers this change.
+  if (await waitingRun()) return 'covered by the run already waiting to start';
   const res = await dispatchWorkflow({ run_kind: 'manual_override' });
   return res.ok ? 'dispatched' : `not dispatched (${res.status})`;
 }
