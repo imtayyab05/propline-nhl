@@ -182,8 +182,17 @@ def _goalie_sv(starters: pd.DataFrame, quality: pd.DataFrame) -> dict[str, dict]
         else:
             val = main
         out[s["team"]] = {"sv": val, "name": s["goalie_name"], "status": s["status"],
-                          "confidence": s["confidence"]}
+                          "confidence": s["confidence"],
+                          "manual": bool(s.get("manual")) if s.get("manual") == s.get("manual")
+                          else False}
     return out
+
+
+def manual_note(*sides) -> str:
+    """Label for rows touched by a manual goalie confirmation (order 4)."""
+    m = [f"{(g or {}).get('name') or '?'} ({team})" for team, g in sides
+         if (g or {}).get("manual")]
+    return ("Goalie confirmed manually: " + ", ".join(m)) if m else ""
 
 
 def goalie_check(*sides) -> str:
@@ -264,6 +273,11 @@ def score_player_props(schedule, avail, rates, team_tbl, sa_pos, starters,
     df["opp_goalie_sv"] = df["opponent"].map(lambda o: (gk.get(o) or {}).get("sv", lg_sv))
     df["opp_goalie_weak"] = 1 - df["opp_goalie_sv"]
     df["goalie_check"] = df["opponent"].map(lambda o: goalie_check((o, gk.get(o))))
+    # Manual overrides (order 4): the row's own manual IN, and a manually confirmed goalie
+    # he shoots at. Shown as the Manual column on every player board.
+    own = df["status_source"].eq("manual").map({True: "Marked in manually", False: ""})
+    opp = df["opponent"].map(lambda o: manual_note((o, gk.get(o))))
+    df["override_note"] = ["; ".join(x for x in (a, b) if x) or None for a, b in zip(own, opp)]
 
     ab = absences.set_index("team") if not absences.empty else pd.DataFrame()
     df["opp_missing"] = df["opponent"].map(
@@ -349,6 +363,7 @@ def score_total_goals(schedule, team_tbl, starters, quality, absences) -> pd.Dat
             "goalies_lean": int(hg.get("confidence") == "lean") +
                             int(ag.get("confidence") == "lean"),
             "goalie_check": goalie_check((a, ag), (h, hg)),
+            "override_note": manual_note((a, ag), (h, hg)) or None,
             "missing_regulars": int(_ab(h, "missing_regulars") + _ab(a, "missing_regulars")),
             "missing_names": ", ".join(x for x in (_ab(a, "missing_names"),
                                                    _ab(h, "missing_names")) if x),

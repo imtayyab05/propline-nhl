@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .scoring import _goalie_sv, _weighted, goalie_check
+from .scoring import _goalie_sv, _weighted, goalie_check, manual_note
 
 WEIGHTS = {
     # team goals tonight
@@ -219,6 +219,8 @@ def team_context(schedule, team_tbl, starters, quality, absences,
                 "opp_goalie_conf": theirs.get("confidence"),
                 # team boards score this team's offence: the goalie it SHOOTS AT matters
                 "goalie_check": goalie_check((opp, theirs)),
+                # both goalies: a team board row is about its own net and the other one
+                "override_note": manual_note((team, mine), (opp, theirs)) or None,
                 "back_to_back": bool(b2b.get(team)), "missing_toi": round(missing, 1),
                 "missing_names": ab["missing_names"].get(team, "") if "missing_names" in ab else "",
                 "strength": strength,
@@ -272,6 +274,7 @@ def score_game_boards(schedule, team_tbl, starters, quality, absences,
         goalie_check((a, {"name": an, "confidence": ac}), (h, {"name": hn, "confidence": hc}))
         for a, an, ac, h, hn, hc in zip(g["away_team"], g["away_goalie"], g["away_goalie_conf"],
                                          g["home_team"], g["home_goalie"], g["home_goalie_conf"])]
+    g["override_note"] = g["home_override_note"]      # already names both goalies
     g["pace"] = g["home_sf"] + g["home_sa"] + g["away_sf"] + g["away_sa"]
     g["l10_pace"] = (g["home_l10_sf"] + g["away_l10_sf"] +
                      g["home_opp_l10_sa"] + g["away_opp_l10_sa"])

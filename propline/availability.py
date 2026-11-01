@@ -93,7 +93,8 @@ def _early_exit(skater_logs: pd.DataFrame, season: int, day: str) -> pd.DataFram
 def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
                  skater_logs: pd.DataFrame, team_logs: pd.DataFrame,
                  season: int, day: str,
-                 dressed: pd.DataFrame | None = None) -> pd.DataFrame:
+                 dressed: pd.DataFrame | None = None,
+                 manual: dict | None = None) -> pd.DataFrame:
     if schedule.empty or rosters.empty:
         return pd.DataFrame(columns=AVAIL_COLS)
 
@@ -162,10 +163,22 @@ def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
         if on_list and not final:
             reason[-1] += "; on tonight's extended roster (not yet final)"
 
+        # Manual OUT / IN from the admin panel (order 4). The official game roster beats
+        # it: a player left off the list is out, and a final list settles it either way.
+        mv = (manual or {}).get(int(p["player_id"]))
+        if mv is not None:
+            if on_list is False or final:
+                reason[-1] += f"; manual {mv.upper()} ignored (official game roster)"
+            else:
+                status[-1] = mv
+                source[-1] = "manual"
+                reason[-1] = "Marked out manually" if mv == "out" else "Marked in manually"
+
         # Left his last game early: only for a regular who played that game (an absence
         # is already OUT), and cleared once tonight's final game roster has him dressed.
         e = early.loc[p["player_id"]] if p["player_id"] in early.index else None
         flag = (e is not None and bool(e["early"]) and status[-1] == "in" and not final
+                and source[-1] != "manual"
                 and e["prior_toi"] >= REGULAR_TOI[p["pos_group"]]
                 and team_ids and e["last_game_id"] == team_ids[-1])
         check.append(bool(flag))
@@ -236,7 +249,8 @@ def team_absences(avail: pd.DataFrame) -> pd.DataFrame:
                      "missing_d_toi": round(o.loc[o.pos_group == "D", "base_toi"].sum(), 1),
                      "missing_pp_toi": round(o["base_pp_toi"].sum(), 1),
                      "missing_names": ", ".join(
-                         list(o["player_name"]) +
+                         [f"{n} (marked out manually)" if s == "manual" else n
+                          for n, s in zip(o["player_name"], o["status_source"])] +
                          [f"{n} (left last game early?)"
                           for n in chk.loc[chk["team"] == team, "player_name"]])})
     return pd.DataFrame(rows, columns=cols)

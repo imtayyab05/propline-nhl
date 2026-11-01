@@ -143,27 +143,31 @@ def snapshot_rows(day: str, schedule: pd.DataFrame, player_scores: pd.DataFrame,
                 continue
             # "check" = left his last game early: the board kept him out of its Top 25
             chk = bool(r.get("check")) if r.get("check") == r.get("check") else False
+            ovr = r.get("override_note") if isinstance(r.get("override_note"), str) else None
             if r["prop"] == "sog":
                 add("sog", gid, r["player_id"], r["player_name"], r["team"], r["opponent"],
                     r["rank"], r["score"], r.get("safe_level"),
-                    {"aggressive": r.get("aggressive_level"), "check": chk})
+                    {"aggressive": r.get("aggressive_level"), "check": chk, "override": ovr})
             else:
                 add(r["prop"], gid, r["player_id"], r["player_name"], r["team"],
-                    r["opponent"], r["rank"], r["score"], extra={"check": chk})
+                    r["opponent"], r["rank"], r["score"],
+                    extra={"check": chk, "override": ovr})
 
     if total_goals is not None and not total_goals.empty:
         for _, r in total_goals.iterrows():
             if int(r["game_id"]) in start:
                 add("total_goals", r["game_id"], "game", r["matchup"], r["away_team"],
                     r["home_team"], r["rank"], r["score"], r.get("market_total"),
-                    {"lean": r.get("model_lean"), "proj": r.get("proj_total")})
+                    {"lean": r.get("model_lean"), "proj": r.get("proj_total"),
+                     "override": r.get("override_note")})
     tg = (boards or {}).get("team_goals")
     if tg is not None and not tg.empty:
         for _, r in tg.iterrows():
             if int(r["game_id"]) in start:
                 add("team_goals", r["game_id"], r["team"], r["team"], r["team"],
                     r["opponent"], r["rank"], r["score"], r.get("market_team_total"),
-                    {"tag": r.get("tt_tag"), "proj": r.get("proj_goals")})
+                    {"tag": r.get("tt_tag"), "proj": r.get("proj_goals"),
+                     "override": r.get("override_note")})
     for key in ("moneyline", "puck_line"):
         b = (boards or {}).get(key)
         if b is None or b.empty:
@@ -173,7 +177,8 @@ def snapshot_rows(day: str, schedule: pd.DataFrame, player_scores: pd.DataFrame,
                 add(key, r["game_id"], r["pick"], r.get("matchup"), r["pick"], r["dog"],
                     r["rank"], r["score"],
                     r.get("pick_pl_point") if key == "puck_line" else None,
-                    {"market_fav": r.get("market_fav"), "edge": r.get("edge")})
+                    {"market_fav": r.get("market_fav"), "edge": r.get("edge"),
+                     "override": r.get("override_note")})
     return pd.DataFrame(rows), sorted(start)
 
 
@@ -243,7 +248,8 @@ def grade(day: str, snaps: pd.DataFrame, games: dict[int, dict],
                 "frozen_rank": _py(r.get("rank")), "score": _num(r.get("score")),
                 "pick": pick, "line": _num(line), "actual": _num(actual),
                 "actual_text": actual_text, "result": result, "note": note,
-                "frozen_at": r.get("frozen_at"), "run_type": r.get("run_type")}
+                "frozen_at": r.get("frozen_at"), "run_type": r.get("run_type"),
+                "override": (r["extra"].get("override") or None)}
 
     # --- player boards ----------------------------------------------------------------
     for parent in PLAYER_BOARDS:

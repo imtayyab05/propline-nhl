@@ -75,10 +75,11 @@ jobs:
 
           # Fixed list, so an arbitrary string never becomes a run label. scheduled_wave
           # (1 Nov 2026) is a schedule-driven run 75-90 min before a group of puck drops:
-          # no Groq, no odds (it is in neither list below). midday / late are kept only so
+          # no Groq, no odds (it is in neither list below). manual_override (order 4) is the
+          # re-score the admin panel dispatches after a save: no Groq, no odds either. midday / late are kept only so
           # a straggling old dispatch is still labelled.
           case "$IN_KIND" in
-            scheduled_morning|scheduled_pregame|scheduled_wave|scheduled_midday|scheduled_late)
+            scheduled_morning|scheduled_pregame|scheduled_wave|manual_override|scheduled_midday|scheduled_late)
               KIND="$IN_KIND" ;;
             *) KIND=manual ;;
           esac

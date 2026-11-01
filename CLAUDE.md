@@ -258,3 +258,25 @@ vs 10% base; <60% = 42 flags, 25 missed. Last 2 weeks: 11 flagged, 9 missed next
 catches Marchenko (7:05 of 18:10) on 28 Oct. Injury feeds: NHL API has none; ESPN terms
 forbid automated use (rejected 2 Oct); Apify wrappers resell ESPN and charge; Sportradar /
 SportsData.io are paid keys -> no feed. Guide build script now lives in delivery/md2docx.py.
+
+**Order 4: Manual overrides + AI data feed — paid, accepted 1 Nov 2026, due 8 Nov.**
+Overrides: `web/admin.html` (unlinked, noindex) -> `netlify/functions/override.mjs`
+(POST /api/override; passphrase env **ADMIN_SECRET**, NOT UPDATE_SECRET; writes with
+**SUPABASE_SERVICE_KEY** in Netlify env; validates team/player against the official
+schedule + roster; today's ET slate only; refused once the game starts) -> table
+`manual_overrides` (db/overrides.sql: anon read-only, trigger refuses writes after
+game_start, rows never deleted, "remove" sets removed_at) -> dispatches run_kind
+`manual_override` (no Groq, no odds). Pipeline: `propline/overrides.py` loaded in
+collect; goalie confirm -> status confirmed + `manual` (goalies.py), skater OUT/IN ->
+status_source "manual" (availability.py; OUT redistributes minutes like a roster OUT;
+IN clears early-exit). Priority: official game roster > manual > projection. Labels:
+`override_note` -> "Manual" column on every board/Excel/CSV, "(marked out manually)" in
+Regulars Out / Opp Missing, Out Tonight; snapshots carry it and pick_results.override
+marks graded picks ("manual" badge on Results). Health check has a MANUAL OVERRIDES
+section. AI feed: `propline/feed.py` builds it each run (data/picks/feed_{day}.json;
+table `ai_feed` on publish) from the board frames; `netlify/functions/feed.mjs`
+serves GET /api/feed?date=&format=md|json with the anon key + live status overlay;
+Markdown renderer in `netlify/lib/feedmd.mjs`; dashboard "Copy for AI" button. Shaped
+for Devin's Gemini prompt (client file, never copied here): today's teams list, L3/L5/
+L10/season rates, his low-TOI gate (TOI L10 12.0-16.9, Pts/60>3 or Ast/60>2), SV<=.888.
+Size: 17 Oct (14 games) ~10.9k chars = ~2.7-3.6k tokens; 13 Oct (16 games) ~2.9-3.9k.

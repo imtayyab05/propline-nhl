@@ -32,6 +32,7 @@ TAIL = [
     ("bump_from", "Minutes From"),
     ("opp_missing", "Opp Missing"),
     ("check_note", "Status Check"),        # left his last game early (29 Oct 2026)
+    ("override_note", "Manual"),           # manual overrides (order 4)
     ("rationale", "Why"),
 ]
 
@@ -163,6 +164,7 @@ TOTAL_GOALS_COLS = [
     ("market_total", "Market Total"), ("model_lean", "Model Lean"),
     ("proj_vs_market", "Proj - Market"),
     ("over_price", "Over"), ("under_price", "Under"),
+    ("override_note", "Manual"),           # manual overrides (order 4)
     ("rationale", "Why"),
 ]
 
@@ -176,14 +178,14 @@ BOARD_SHEETS = {
         ("market_agrees", "Market Agrees"), ("pick_goalie", "Its Goalie"),
         ("dog_goalie", "Other Goalie"), ("goalie_check", "Goalie Check"),
         ("pick_b2b", "Its B2B"), ("dog_b2b", "Other B2B"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
     "puck_line": ("Puck Line", [
         ("rank", "#"), ("subject", "Play"), ("matchup", "Matchup"), ("edge", "Edge"),
         ("score", "Score"), ("margin_fuel", "Its GF + Their GA"),
         ("dog_goalie", "Goalie Faced"), ("goalie_check", "Goalie Check"),
         ("pick_pl_point", "Market PL"),
         ("pick_pl_price", "PL Price"), ("market_fav", "Market Favourite"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
     "team_goals": ("Team Goals", [
         ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
         ("gf", "GF/G"), ("xgf", "xGF/G"), ("opp_ga", "Opp GA/G"),
@@ -193,29 +195,29 @@ BOARD_SHEETS = {
         ("proj_goals", "Projected Goals"), ("tt_tag", "Team Total Tag"),
         ("market_team_total", "Market Team Total"), ("tt_over_price", "Over"),
         ("tt_under_price", "Under"), ("missing_names", "Regulars Out"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
     "team_sog": ("Team SOG", [
         ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
         ("sf", "SOG/G"), ("opp_sa", "Opp SOG Agst/G"), ("l10_sf", "SOG/G L10"),
         ("opp_l10_sa", "Opp SOG Agst/G L10"), ("missing_names", "Regulars Out"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
     "game_sog": ("Game SOG", [
         ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
         ("away_sf", "Away SOG/G"), ("away_sa", "Away SOG Agst/G"),
         ("home_sf", "Home SOG/G"), ("home_sa", "Home SOG Agst/G"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
     "team_ppg": ("Team PPG", [
         ("rank", "#"), ("team", "Team"), ("opponent", "Opp"), ("score", "Score"),
         ("pp_pct", "PP%"), ("ppg", "PPG/G"), ("opp_pen_taken", "Opp Times SH/G"),
         ("opp_pk_pct", "Opp PK%"), ("opp_ppga", "Opp PPG Agst/G"),
-        ("goalie_check", "Goalie Check"), ("rationale", "Why")]),
+        ("goalie_check", "Goalie Check"), ("override_note", "Manual"), ("rationale", "Why")]),
     "game_ppg": ("Game PPG", [
         ("rank", "#"), ("matchup", "Matchup"), ("score", "Score"),
         ("away_pp_pct", "Away PP%"), ("home_pp_pct", "Home PP%"),
         ("home_opp_pen_taken", "Away Times SH/G"),
         ("away_opp_pen_taken", "Home Times SH/G"), ("ppg_sum", "Combined PPG/G"),
         ("goalie_check", "Goalie Check"),
-        ("rationale", "Why")]),
+        ("override_note", "Manual"), ("rationale", "Why")]),
 }
 
 TEAM_COLS = [
@@ -257,7 +259,8 @@ def columns_for(prop: str):
     # L5 / L3 sit right after every L10 column (16 Oct 2026), display only
     if prop in TREND_MIDDLE:
         # the early-exit warning shows on the trend tabs too (they share the rank)
-        return with_recent(HEAD + PROP_MIDDLE[prop] + [("check_note", "Status Check")])
+        return with_recent(HEAD + PROP_MIDDLE[prop] + [("check_note", "Status Check"),
+                                                       ("override_note", "Manual")])
     return with_recent(HEAD + PROP_MIDDLE.get(prop, []) + TAIL)
 
 

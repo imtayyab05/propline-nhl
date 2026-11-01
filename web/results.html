@@ -61,6 +61,7 @@
   .b-hit{background:rgba(62,207,142,.16);color:var(--good)}
   .b-miss{background:rgba(255,107,107,.14);color:var(--bad)}
   .b-void{background:rgba(139,153,174,.16);color:var(--muted)}
+  .b-man{background:rgba(124,140,255,.18);color:var(--accent2)}
   .empty{padding:40px 16px;text-align:center;color:var(--muted)}
   .hidden{display:none}
   .rules{color:var(--muted);font-size:13.5px;max-width:900px}
@@ -246,7 +247,9 @@ const PICK_COLS = [
   {label:'Graded on', get:r=>r.pick, show:r=>esc(r.pick)},
   {label:'Actual', get:r=>r.actual, show:r=>esc(r.actual_text ?? (r.actual ?? '')), num:true},
   {label:'Result', get:r=>({hit:2, miss:1, void:0})[r.result],
-   show:r=>`<span class="badge b-${r.result}">${r.result}</span>${r.note ? ` <span class="meta">${esc(r.note)}</span>` : ''}`},
+   show:r=>`<span class="badge b-${r.result}">${r.result}</span>${r.note ? ` <span class="meta">${esc(r.note)}</span>` : ''}`
+     // a pick whose board was touched by a manual override (order 4)
+     + (r.override ? ` <span class="badge b-man" title="${esc(r.override)}">manual</span>` : '')},
   {label:'Score', get:r=>r.score, show:r=>r.score ?? '', num:true, dim:true},
   {label:'Frozen at', get:r=>r.frozen_at, show:r=>r.frozen_at ? esc(`${r.run_type || ''} ${String(r.frozen_at).slice(11,16)} UTC`) : '', dim:true},
 ];

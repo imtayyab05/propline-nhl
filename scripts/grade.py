@@ -123,6 +123,10 @@ def main() -> int:
         if args.test_from_boards:
             show(res, f"TEST - {day} graded from the stored boards (not a fair record)")
             continue
+        # the override column (db/overrides.sql) is only sent when a pick carries one,
+        # so grading keeps working on a database that has not had that SQL run yet
+        if "override" in res and res["override"].isna().all():
+            res = res.drop(columns="override")
         check_json(res)
         delete_where("pick_results", {"slate_date": f"eq.{day}"})
         upsert("pick_results", res, on_conflict="slate_date,board,game_id,subject")

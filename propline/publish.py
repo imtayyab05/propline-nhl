@@ -47,11 +47,11 @@ PROP_DETAIL.update({
 })
 
 COMMON_DETAIL = ["rationale_fp", "position", "recent_games", "gp_season", "toi_recent", "toi_bump",
-                 "bump_from", "opp_missing", "game_id", "check_note"]
+                 "bump_from", "opp_missing", "game_id", "check_note", "override_note"]
 
 GAME_DETAIL = ["rationale_fp", "home_team", "away_team", "home_gf_pg", "away_gf_pg", "home_ga_pg",
                "away_ga_pg", "home_goalie", "away_goalie", "home_goalie_sv",
-               "away_goalie_sv", "goalies_lean", "combined_pp_threat",
+               "away_goalie_sv", "goalies_lean", "combined_pp_threat", "override_note",
                "missing_regulars", "missing_names", "market_total", "over_price",
                "under_price", "combined_xg", "goalie_check",
                "proj_total", "model_lean", "proj_vs_market"]
@@ -76,7 +76,7 @@ BOARD_DETAIL = {
     "puck_line": ["goalie_check", "pick", "dog", "edge", "gap", "margin_fuel", "dog_goalie", "pick_ml",
                   "market_fav", "pick_pl_point", "pick_pl_price"],
 }
-BOARD_COMMON = ["rationale_fp", "home_team", "away_team"]
+BOARD_COMMON = ["rationale_fp", "home_team", "away_team", "override_note"]
 
 TEAM_COLS = ["team_id", "team", "team_name", "power_rank", "power_score", "gp", "record",
              "points", "points_pct", "gf_pg", "ga_pg", "sf_pg", "sa_pg", "ppg_pg",
@@ -271,7 +271,8 @@ def publish_slate(slate_date, schedule, starters, avail, player_scores, total_go
     if avail is not None and not avail.empty:
         chk = (avail["check"].fillna(False).astype(bool) if "check" in avail
                else pd.Series(False, index=avail.index))
-        o = avail[((avail["status"] == "out") & avail["regular"]) | chk].copy()
+        man = avail["status_source"].eq("manual") & avail["status"].eq("out")
+        o = avail[((avail["status"] == "out") & avail["regular"]) | chk | man].copy()
         o.loc[chk.loc[o.index], "status"] = "check"
         o["game_date"] = day
         cols = ["game_date", "team", "player_id", "player_name", "position", "base_toi",

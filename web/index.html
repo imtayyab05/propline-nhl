@@ -209,6 +209,7 @@
   .b-lean{background:rgba(255,122,89,.15);color:var(--hot)}
   .b-over{background:rgba(62,207,142,.18);color:var(--good)}
   .b-under{background:rgba(78,161,255,.18);color:var(--accent)}
+  .b-manual{background:rgba(124,140,255,.18);color:var(--accent2)}
   a.navlink{color:var(--text);text-decoration:none;background:var(--panel2);
             border:1px solid var(--line);border-radius:9px;padding:8px 12px;
             transition:border-color .3s var(--ease)}
@@ -420,6 +421,7 @@
     <div class="spacer"></div>
     <button id="xlsx" title="The full generated workbook: every category on its own tab">Download Excel</button>
     <button id="csv" title="Just the rows currently shown, as CSV">Download CSV</button>
+    <button id="ai" title="Copy a compact summary of this slate for an AI model (also at /api/feed)">Copy for AI</button>
   </div>
 
   <div class="wrap">
@@ -1026,6 +1028,8 @@ const PLAYER_TAIL = [
   ['Opp Missing', 'opp_missing'],
   // left his last game early (29 Oct 2026): amber, and kept out of the Top 25
   ['Status Check', 'check_note'],
+  // manual overrides from the admin panel (order 4)
+  ['Manual', 'override_note'],
 ];
 
 // Team tab: season number with its last-10 partner right beside it.
@@ -1060,6 +1064,9 @@ const leanBadge = (label, key) => C(label, r=>rawValue(r, key), null, {html: r=>
   const cls = !v ? '' : /UNDER/.test(v) ? 'b-under' : 'b-over';
   return `<td>${v ? `<span class="badge ${cls}">${esc(v)}</span>` : ''}</td>`; }});
 const fromKey = (label, key, fmt) => LEAN_KEYS.has(key) ? leanBadge(label, key)
+  : key === 'override_note' ? C(label, r=>rawValue(r, key), null, {html: r=>{
+      const v = rawValue(r, key);
+      return `<td>${v ? `<span class="badge b-manual">${esc(v)}</span>` : ''}</td>`; }})
   : key === 'goalie_check' || key === 'check_note'
   // A pick that leans on a goalie we only have as "lean": amber, so it reads as "check
   // your book before betting". Empty when every goalie involved is firm or confirmed.
@@ -1171,7 +1178,7 @@ function columnsFor(){
         {cls:'name'}),
       score(),
       C(team ? 'Goalie Status' : 'Goalies (away / home)', r=>r.goalies_status),
-      ...extra, why];
+      ...extra, fromKey('Manual', 'override_note'), why];
   }
 
   return [rank,
@@ -1190,7 +1197,7 @@ function columnsFor(){
     ...extra,
     // trend tabs are track records: no ice-time tail and no Why (it lives on the board)
     // the early-exit warning still shows there, because the tab shares the board's rank
-    ...(trend ? [fromKey('Status Check', 'check_note')]
+    ...(trend ? [fromKey('Status Check', 'check_note'), fromKey('Manual', 'override_note')]
               : [...withRecent(PLAYER_TAIL).map(fromSpec), why])];
 }
 
@@ -1395,6 +1402,21 @@ async function init(){
   $('#refresh').addEventListener('click', refresh);
   $('#update').addEventListener('click', updateNow);
   $('#csv').addEventListener('click', downloadCsv);
+  // AI data feed (order 4): the same summary served at /api/feed?date=...&format=md
+  $('#ai').addEventListener('click', async () => {
+    const url = `/api/feed?date=${slateDate}&format=md`;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      const text = await r.text();
+      await navigator.clipboard.writeText(text);
+      toast(`Copied the ${slateDate} summary for AI (${Math.round(text.length / 1000)}k characters).`);
+    } catch (e) {
+      // clipboard blocked or feed missing: open it so it can be copied by hand
+      toast(`Could not copy (${e.message}). Opening the feed instead.`);
+      window.open(url, '_blank', 'noopener');
+    }
+  });
   $('#xlsx').addEventListener('click', downloadXlsx);
 
   await loadSlates();

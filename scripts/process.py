@@ -10,9 +10,10 @@ pushes the slate to Supabase.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -20,14 +21,14 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from propline.availability import team_absences  # noqa: E402
-from propline.db import load_env, log_run  # noqa: E402
+from propline.db import load_env, log_run, read, upsert  # noqa: E402
 from propline.games import score_game_boards  # noqa: E402
 from propline.trends import (attach_dvp, build_trend_boards, dvp_table,  # noqa: E402
                              player_trends)
 from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
                             player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
-from propline import odds, projection, results  # noqa: E402
+from propline import feed, odds, projection, results  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
 from propline.publish import (previous_rationales, publish_lines,  # noqa: E402
                               publish_slate, read_lines)
@@ -355,7 +356,8 @@ def main() -> int:
     if not avail.empty:
         chk = (avail["check"].fillna(False).astype(bool) if "check" in avail
                else pd.Series(False, index=avail.index))
-        outs = avail[((avail["status"] == "out") & avail["regular"]) | chk].copy()
+        man = avail["status_source"].eq("manual") & avail["status"].eq("out")
+        outs = avail[((avail["status"] == "out") & avail["regular"]) | chk | man].copy()
         outs.loc[chk.loc[outs.index], "status"] = "check"
     else:
         outs = avail
@@ -381,6 +383,28 @@ def main() -> int:
                                top_n=args.top, game_boards=game_boards)
     print(f"  ok    {out}")
 
+    # AI data feed (order 4): saved beside the workbook every run, stored in ai_feed on
+    # publish. Never allowed to cost the board.
+    feed_doc = None
+    if not schedule.empty:
+        try:
+            def _read_all(table, params):
+                rows, off = [], 0
+                while True:
+                    page = read(table, {**params, "limit": "1000", "offset": str(off)})
+                    rows += page
+                    if len(page) < 1000:
+                        return rows
+                    off += 1000
+            feed_doc = feed.build(day, schedule, starters, quality, avail, player_scores,
+                                  total_goals, game_boards, feed.track_record(_read_all),
+                                  args.run_kind)
+            fp = Path("data/picks") / f"feed_{day}.json"
+            fp.write_text(json.dumps(feed_doc, separators=(",", ":")), encoding="utf8")
+            print(f"  ok    {fp} ({fp.stat().st_size:,} bytes)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  WARN  AI feed not built: {exc}")
+
     if args.publish:
         print("\n  Publishing to Supabase")
         try:
@@ -400,6 +424,15 @@ def main() -> int:
             except Exception as exc:  # noqa: BLE001
                 written["pick_snapshots"] = f"FAILED {str(exc)[:120]}"
                 print(f"  WARN  pick snapshot failed: {exc}")
+            if feed_doc is not None:
+                try:
+                    written["ai_feed"] = upsert("ai_feed", pd.DataFrame([{
+                        "slate_date": day, "feed": feed_doc, "run_type": args.run_kind,
+                        "generated_at": datetime.now(timezone.utc).isoformat()}]),
+                        on_conflict="slate_date")
+                except Exception as exc:  # noqa: BLE001
+                    written["ai_feed"] = f"FAILED {str(exc)[:100]}"
+                    print(f"  WARN  AI feed not stored: {exc}")
             for table, n in written.items():
                 print(f"  ok    {table:16} {n} rows")
             try:

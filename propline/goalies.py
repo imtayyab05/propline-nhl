@@ -37,7 +37,7 @@ SV_PRIOR_SHOTS = 600
 PREV_SEASON_WEIGHT = 0.5   # last season's shots count half
 
 STARTER_COLS = ["game_id", "team", "team_id", "goalie_id", "goalie_name", "status",
-                "confidence", "reason", "starts_recent", "team_games_recent",
+                "confidence", "reason", "manual", "starts_recent", "team_games_recent",
                 "last_start", "back_to_back", "backup_id", "backup_name"]
 
 
@@ -45,7 +45,8 @@ def project_starters(schedule: pd.DataFrame, rosters: pd.DataFrame,
                      goalie_logs: pd.DataFrame, team_logs: pd.DataFrame,
                      season: int, prev_season: int, day: str,
                      dressed: pd.DataFrame | None = None,
-                     confirmed: pd.DataFrame | None = None) -> pd.DataFrame:
+                     confirmed: pd.DataFrame | None = None,
+                     manual: dict | None = None) -> pd.DataFrame:
     """One row per team playing today: who we expect in net and why."""
     if schedule.empty:
         return pd.DataFrame(columns=STARTER_COLS)
@@ -97,7 +98,7 @@ def project_starters(schedule: pd.DataFrame, rosters: pd.DataFrame,
 
             row = {"game_id": g["game_id"], "team": team, "team_id": tid,
                    "team_games_recent": n_recent, "back_to_back": False,
-                   "status": "projected"}
+                   "status": "projected", "manual": False}
             if not table:
                 rows.append({**row, "goalie_id": None, "goalie_name": None,
                              "confidence": "none", "reason": "no goalie found on roster",
@@ -136,6 +137,24 @@ def project_starters(schedule: pd.DataFrame, rosters: pd.DataFrame,
                         reason = "projected goalie is not on tonight's game roster"
                         conf = "lean"
 
+            # Manual confirmation from the admin panel (order 4). The official game
+            # roster beats it: a goalie the posted roster leaves off cannot start.
+            mg = (manual or {}).get(team)
+            if mg is not None:
+                posted = set()
+                if dressed is not None and not dressed.empty:
+                    posted = set(dressed[(dressed["game_id"] == g["game_id"]) &
+                                         (dressed["team_id"] == tid) &
+                                         (dressed["position"] == "G")]["player_id"])
+                if posted and mg not in posted:
+                    reason = f"manual pick is not on tonight's game roster; {reason}"
+                else:
+                    match = [r for r in table if r["pid"] == mg]
+                    pick = match[0] if match else {"pid": mg, "starts": 0, "last": ""}
+                    other = next((r for r in table if r["pid"] != mg), None)
+                    row["status"], row["manual"] = "confirmed", True
+                    reason, conf = "Goalie confirmed manually", "confirmed"
+
             # The league's own starter flag — only exists once the game is under way.
             if confirmed is not None and not confirmed.empty:
                 cg = confirmed[(confirmed["game_id"] == g["game_id"]) &
@@ -145,7 +164,7 @@ def project_starters(schedule: pd.DataFrame, rosters: pd.DataFrame,
                     match = [r for r in table if r["pid"] == gid]
                     pick = match[0] if match else {"pid": gid, "starts": 0, "last": ""}
                     other = next((r for r in table if r["pid"] != gid), None)
-                    row["status"] = "confirmed"
+                    row["status"], row["manual"] = "confirmed", False
                     reason, conf = "starter per official boxscore", "confirmed"
 
             rows.append({**row, "goalie_id": pick["pid"],

@@ -28,6 +28,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from propline import overrides  # noqa: E402
 from propline.availability import availability, team_absences  # noqa: E402
 from propline.db import load_env, log_run  # noqa: E402
 from propline.goalies import project_starters  # noqa: E402
@@ -149,14 +150,18 @@ def main() -> int:
     print(f"  ok    game rosters posted for {dressed['game_id'].nunique()}/{len(schedule)} "
           f"games, starters confirmed for {len(confirmed)} teams (game states: {state_note})")
 
+    # Manual overrides from the admin panel (order 4): official roster > manual > projection
+    manual = overrides.load(day)
+    print(f"  ok    manual overrides: {overrides.summary(manual)}")
     starters = project_starters(schedule, rosters, goalie_logs, team_logs, season, prev,
-                                day, dressed=dressed, confirmed=confirmed)
+                                day, dressed=dressed, confirmed=confirmed,
+                                manual=overrides.goalie_overrides(manual))
     for _, s in starters.iterrows():
         print(f"        {s['team']:4} {str(s['goalie_name']):24} {s['status']:9} "
               f"{s['confidence']:9} {s['reason']}")
 
     avail = availability(schedule, rosters, skater_logs, team_logs, season, day,
-                         dressed=dressed)
+                         dressed=dressed, manual=overrides.status_overrides(manual))
     absences = team_absences(avail)
     outs = avail[(avail["status"] == "out") & avail["regular"]] if not avail.empty else avail
     print(f"  ok    {len(outs)} regulars out, "
@@ -188,7 +193,8 @@ def main() -> int:
             detail=(f"{len(schedule)} games, {len(skater_cur)} skater rows this season, "
                     f"{len(outs)} regulars out, goalies: "
                     f"{(starters['status'] == 'confirmed').sum()} confirmed / {len(starters)}, "
-                    f"shot data {shot_games}/{len(done_games)} games, states: {state_note}"),
+                    f"shot data {shot_games}/{len(done_games)} games, states: {state_note}"
+                    f", overrides: {overrides.summary(manual)}"),
             started_at=started)
     print(f"\n{'='*66}\ncollection {status.upper()}")
     return 0

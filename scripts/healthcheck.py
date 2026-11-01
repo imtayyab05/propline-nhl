@@ -391,6 +391,26 @@ def main() -> int:
         else:
             print("                    team totals: pulled on the pre-game run, not yet run")
 
+    # Manual overrides (order 4): what Devin changed by hand, and that the re-score runs
+    # it dispatched went through. Kept apart from the scheduled runs above.
+    print("\nMANUAL OVERRIDES  (admin panel)")
+    try:
+        ov = read_all("manual_overrides", {"select": "slate_date,kind,value,removed_at",
+                                           "slate_date": f"gte.{a['since']}"})
+        kinds = Counter((o["kind"], o["value"]) for o in ov)
+        removed = sum(1 for o in ov if o.get("removed_at"))
+        print(f"  set               {len(ov)} ({kinds.get(('goalie', 'confirmed'), 0)} goalie, "
+              f"{kinds.get(('status', 'out'), 0)} out, {kinds.get(('status', 'in'), 0)} in); "
+              f"{removed} later removed or replaced")
+        reruns = [r for r in a["runs"] if r["run_type"] == "manual_override" and r["stage"] == "processing"]
+        bad = [r for r in a["runs"] if r["run_type"] == "manual_override" and r["status"] != "ok"]
+        print(f"  re-score runs     {len(reruns)}" + (f", {len(bad)} not ok" if bad else ""))
+        touched = read_all("pick_results", {"select": "board", "override": "not.is.null",
+                                            "slate_date": f"gte.{a['since']}"})
+        print(f"  graded picks      {len(touched)} touched by an override (shown 'manual' on Results)")
+    except Exception as exc:  # noqa: BLE001 - tables missing until db/overrides.sql is run
+        print(f"  NOT SET UP        {str(exc)[:90]}  <-- run db/overrides.sql in Supabase")
+
     R = results_status(a, L)
     print("\nRESULTS PAGE  (picks frozen before puck drop, graded next morning)")
     if not R["ok"]:
