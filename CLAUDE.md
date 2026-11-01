@@ -280,3 +280,10 @@ Markdown renderer in `netlify/lib/feedmd.mjs`; dashboard "Copy for AI" button. S
 for Devin's Gemini prompt (client file, never copied here): today's teams list, L3/L5/
 L10/season rates, his low-TOI gate (TOI L10 12.0-16.9, Pts/60>3 or Ast/60>2), SV<=.888.
 Size: 17 Oct (14 games) ~10.9k chars = ~2.7-3.6k tokens; 13 Oct (16 games) ~2.9-3.9k.
+Live test 1 Nov 2026 (panel, OTT @ ANA): Dostal confirm + Amadio OUT -> labels on every
+board, minutes redistributed, feed showed both; removed -> ranks exactly restored, rows
+kept with removed_at. GOTCHA found: GitHub keeps ONE waiting run per concurrency group
+and a new dispatch CANCELS it (only in-progress runs are safe) - the 16:30 wave was
+displaced by an override saved at 16:30. Fix a9edaf6: override.mjs skips its dispatch
+while a run is waiting (`waitingRun()` in netlify/lib/github.mjs); the waiting run reads
+the overrides when it starts. Update Now (trigger.mjs) can still displace a waiting run.
