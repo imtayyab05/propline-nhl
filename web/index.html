@@ -647,14 +647,17 @@ function initNav(){
    hammer the NHL feed from his account. But it is asked for once, inside
    the dialog, instead of through a browser prompt() on every run. */
 
-function askRun({needSecret, error}){
+function askRun({needSecret, error, title, text, okLabel}){
   return new Promise(resolve=>{
     const scrim = $('#scrim'), input = $('#msecret'), err = $('#merr');
     input.classList.toggle('hidden', !needSecret);
     input.value = '';
-    $('#mbody').textContent = needSecret
+    // the same dialog also asks for the AI feed passphrase (title / text / okLabel)
+    $('#mt').textContent = title || 'Start a pipeline run?';
+    $('#mok').textContent = okLabel || 'Start run';
+    $('#mbody').textContent = text || (needSecret
       ? 'Enter the passphrase to start a run. It is remembered on this device, so you will only be asked once.'
-      : "This re-pulls today's data and rebuilds every board. It takes a few minutes.";
+      : "This re-pulls today's data and rebuilds every board. It takes a few minutes.");
     err.textContent = error || '';
     err.classList.toggle('show', !!error);
 
@@ -1403,10 +1406,27 @@ async function init(){
   $('#update').addEventListener('click', updateNow);
   $('#csv').addEventListener('click', downloadCsv);
   // AI data feed (order 4): the same summary served at /api/feed?date=...&format=md
-  $('#ai').addEventListener('click', async () => {
+  // AI data feed (order 4). Passphrase-gated since 4 Nov 2026 (FEED_SECRET, not the
+  // admin or Update Now one): asked once in the usual dialog, remembered on this device.
+  const askFeedKey = error => askRun({needSecret: true, error, title: 'Copy the AI data feed',
+    okLabel: 'Copy', text: 'Enter the AI feed passphrase. It is remembered on this device, so you will only be asked once.'});
+  async function copyFeed(){
+    let key = null;
+    try { key = localStorage.getItem('propline_feed_key'); } catch {}
+    if (!key) {
+      key = await askFeedKey();
+      if (!key) return;
+      try { localStorage.setItem('propline_feed_key', key); } catch {}
+    }
     const url = `/api/feed?date=${slateDate}&format=md`;
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, {headers: {'X-Feed-Key': key}});
+      if (r.status === 401) {
+        try { localStorage.removeItem('propline_feed_key'); } catch {}
+        const retry = await askFeedKey('That passphrase was rejected.');
+        if (retry) { try { localStorage.setItem('propline_feed_key', retry); } catch {} return copyFeed(); }
+        return;
+      }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
       const text = await r.text();
       await navigator.clipboard.writeText(text);
@@ -1414,9 +1434,10 @@ async function init(){
     } catch (e) {
       // clipboard blocked or feed missing: open it so it can be copied by hand
       toast(`Could not copy (${e.message}). Opening the feed instead.`);
-      window.open(url, '_blank', 'noopener');
+      window.open(`${url}&key=${encodeURIComponent(key)}`, '_blank', 'noopener');
     }
-  });
+  }
+  $('#ai').addEventListener('click', copyFeed);
   $('#xlsx').addEventListener('click', downloadXlsx);
 
   await loadSlates();

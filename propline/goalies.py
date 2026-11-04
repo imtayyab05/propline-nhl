@@ -139,8 +139,11 @@ def project_starters(schedule: pd.DataFrame, rosters: pd.DataFrame,
 
             # Manual confirmation from the admin panel (order 4). The official game
             # roster beats it: a goalie the posted roster leaves off cannot start.
-            mg = (manual or {}).get(team)
+            mg, mname = (manual or {}).get(team, (None, None))
             if mg is not None:
+                # a call-up may be missing from the roster feed: keep the panel's name
+                if mname:
+                    names.setdefault(mg, mname)
                 posted = set()
                 if dressed is not None and not dressed.empty:
                     posted = set(dressed[(dressed["game_id"] == g["game_id"]) &

@@ -69,15 +69,58 @@ async function todaysGames(day) {
   return out;
 }
 
-async function roster(team) {
+const STATS = 'https://api.nhle.com/stats/rest/en';
+const RECENT_DAYS = 30;          // ~10-14 games: covers a goalie who has been playing
+
+// Goalies who appeared for the club recently (official stats API, one call). The
+// current-roster endpoint lagged Laurent Brossoit's call-up to ANA on 1-2 Nov 2026, so
+// the panel could not offer him; anyone actually playing for the club counts too.
+async function recentGoalies(team) {
+  const since = new Date(Date.now() - RECENT_DAYS * 864e5).toISOString().slice(0, 10);
+  const exp = `teamAbbrev="${team}" and gameDate>="${since}"`;
+  try {
+    const r = await fetch(`${STATS}/goalie/summary?isAggregate=false&isGame=true&limit=200` +
+                          `&cayenneExp=${encodeURIComponent(exp)}`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const seen = new Map();
+    for (const x of j.data || []) if (!seen.has(x.playerId)) seen.set(x.playerId, x.goalieFullName);
+    return [...seen].map(([id, name]) => ({ player_id: id, pos: 'G', name, number: null,
+                                            source: 'played recently' }));
+  } catch { return []; }
+}
+
+// Goalies on tonight's posted game roster, once the league has published it.
+async function gameRosterGoalies(game, team) {
+  if (!game) return [];
+  try {
+    const r = await fetch(`${NHL}/gamecenter/${game.game_id}/play-by-play`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const tid = game.away === team ? j.awayTeam?.id : j.homeTeam?.id;
+    return (j.rosterSpots || []).filter(s => s.teamId === tid && s.positionCode === 'G')
+      .map(s => ({ player_id: s.playerId, pos: 'G', number: s.sweaterNumber ?? null,
+                   name: `${s.firstName?.default ?? ''} ${s.lastName?.default ?? ''}`.trim(),
+                   source: "tonight's game roster" }));
+  } catch { return []; }
+}
+
+async function roster(team, game) {
   const r = await fetch(`${NHL}/roster/${encodeURIComponent(team)}/current`);
   if (!r.ok) throw new Error(`roster ${team}: ${r.status}`);
   const j = await r.json();
   const p = (x, pos) => ({ player_id: x.id, pos,
     name: `${x.firstName?.default ?? ''} ${x.lastName?.default ?? ''}`.trim(),
     number: x.sweaterNumber ?? null });
+  // goalies: union of current roster, tonight's game roster and recent appearances
+  const goalies = new Map();
+  const extra = await Promise.all([gameRosterGoalies(game, team), recentGoalies(team)]);
+  for (const g of [...(j.goalies || []).map(x => ({ ...p(x, 'G'), source: 'current roster' })),
+                   ...extra.flat()]) {
+    if (!goalies.has(g.player_id)) goalies.set(g.player_id, g);
+  }
   return {
-    goalies: (j.goalies || []).map(x => p(x, 'G')),
+    goalies: [...goalies.values()],
     skaters: [...(j.forwards || []).map(x => p(x, x.positionCode || 'F')),
               ...(j.defensemen || []).map(x => p(x, 'D'))],
   };
@@ -116,7 +159,7 @@ export default async (req) => {
     if (body.action === 'roster') {
       const g = gameOf(body.team);
       if (!g) return json({ error: `${body.team} does not play today` }, 400);
-      return json({ team: body.team, game: g, ...(await roster(body.team)) });
+      return json({ team: body.team, game: g, ...(await roster(body.team, g)) });
     }
 
     if (body.action === 'set') {
@@ -128,7 +171,7 @@ export default async (req) => {
       const g = gameOf(team);
       if (!g) return json({ error: `${team} does not play today` }, 400);
       if (g.started) return json({ error: 'that game has started; overrides are closed' }, 409);
-      const ro = await roster(team);
+      const ro = await roster(team, g);
       const pool = kind === 'goalie' ? ro.goalies : ro.skaters;
       const player = pool.find(x => x.player_id === pid);
       if (!player) return json({ error: `not a ${kind === 'goalie' ? 'goalie' : 'skater'} on ${team}'s roster` }, 400);

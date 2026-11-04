@@ -287,3 +287,14 @@ and a new dispatch CANCELS it (only in-progress runs are safe) - the 16:30 wave 
 displaced by an override saved at 16:30. Fix a9edaf6: override.mjs skips its dispatch
 while a run is waiting (`waitingRun()` in netlify/lib/github.mjs); the waiting run reads
 the overrides when it starts. Update Now (trigger.mjs) can still displace a waiting run.
+
+**Fixes 4 Nov 2026 (maintenance):** (1) Panel goalie list = union of /roster/{team}/current
++ tonight's game roster (play-by-play rosterSpots, G) + goalies who played for the team in
+the last 30 days (stats API goalie/summary, one call); "set" accepts any of them. The roster
+feed lagged Brossoit's ANA call-up on 1-2 Nov. The goalie's name travels with the override
+(goalie_overrides -> (id, name)) so a call-up missing from the roster feed is not blank.
+Tested: Cooper Black (FLA, 0 NHL games last season, not on the roster feed) confirmed ->
+SV .894 (shrunk to league), no NaN on any board. (2) AI feed gated: env **FEED_SECRET**
+(Netlify), ?key= or x-feed-key header; read with the service key; ai_feed closed to anon
+(db/feed_lock.sql - run AFTER the deploy). Copy for AI asks once (localStorage
+propline_feed_key) via the Update Now dialog.

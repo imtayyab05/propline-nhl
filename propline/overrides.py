@@ -56,12 +56,14 @@ def load(day: str) -> pd.DataFrame:
     return df
 
 
-def goalie_overrides(ov: pd.DataFrame) -> dict[str, int]:
-    """team -> goalie_id confirmed manually."""
+def goalie_overrides(ov: pd.DataFrame) -> dict[str, tuple[int, str]]:
+    """team -> (goalie_id, name) confirmed manually. The name travels with the id: a
+    fresh call-up may not be on the roster feed yet (Brossoit, ANA, 1-2 Nov 2026), and
+    without it the board would show a blank goalie."""
     if ov is None or ov.empty:
         return {}
     g = ov[(ov["kind"] == "goalie") & (ov["value"] == "confirmed")]
-    return dict(zip(g["team"], g["player_id"].astype(int)))
+    return {t: (int(p), n) for t, p, n in zip(g["team"], g["player_id"], g["player_name"])}
 
 
 def status_overrides(ov: pd.DataFrame) -> dict[int, str]:

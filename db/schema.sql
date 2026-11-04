@@ -351,3 +351,7 @@ begin
 end $$;
 
 grant usage, select on all sequences in schema public to service_role;
+
+-- ai_feed closed to anon (4 Nov 2026): see db/feed_lock.sql
+drop policy if exists "public read" on ai_feed;
+revoke select, insert, update, delete, truncate on ai_feed from anon, authenticated;
