@@ -46,6 +46,7 @@
   .ok{color:var(--good)} .err{color:var(--bad)}
   .hidden{display:none}
   input[type=search]{width:100%;margin-bottom:8px}
+  input.num{width:82px}
 </style>
 </head>
 <body>
@@ -66,6 +67,12 @@
     <h2>Today's games <span class="meta" id="slate"></span></h2>
     <div class="games" id="games"></div>
 
+    <h2>Game totals <span class="meta">your book's line, if it differs from consensus</span></h2>
+    <div class="card">
+      <div class="wrap"><table><tbody id="totals"></tbody></table></div>
+      <div class="meta" style="margin-top:8px">Changes the Market Total and Model Lean shown on the boards. It never changes a score, and the Track Record keeps grading the consensus line.</div>
+    </div>
+
     <div id="teamBox" class="hidden">
       <h2 id="teamTitle"></h2>
       <div class="card">
@@ -77,6 +84,15 @@
         <input type="search" id="find" placeholder="Filter by name…">
         <div class="wrap"><table><tbody id="skaters"></tbody></table></div>
       </div>
+    </div>
+
+    <h2>Active game totals</h2>
+    <div class="card wrap">
+      <table>
+        <thead><tr><th>Game</th><th>Total</th><th>Over / Under</th><th>Set (ET)</th><th></th></tr></thead>
+        <tbody id="activeTotals"></tbody>
+      </table>
+      <div class="meta" id="noneTotals">None today.</div>
     </div>
 
     <h2>Active overrides</h2>
@@ -94,7 +110,7 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let SECRET = '', GAMES = [], ROSTER = null, TEAM = null;
+let SECRET = '', GAMES = [], ROSTER = null, TEAM = null, CONSENSUS = {};
 try { SECRET = sessionStorage.getItem('pl_admin') || ''; } catch {}
 
 const et = iso => new Date(iso).toLocaleTimeString('en-US', {timeZone:'America/New_York', hour:'numeric', minute:'2-digit'});
@@ -121,6 +137,43 @@ function renderActive(list){
     try { const j = await api('remove', {id: +b.dataset.rm}); renderActive(j.overrides);
           say(`Removed. Re-score ${j.run}: the boards update in about 3 minutes.`, 'ok'); }
     catch (e) { say(e.message, 'err'); b.disabled = false; }
+  });
+}
+
+const signed = v => v == null ? '-' : (v > 0 ? `+${v}` : `${v}`);
+
+function renderActiveTotals(list){
+  $('#activeTotals').innerHTML = list.map(t => `<tr>
+    <td>${esc(t.matchup)}</td><td><span class="badge b-g">${t.total}</span></td>
+    <td class="meta">${signed(t.over_price)} / ${signed(t.under_price)}</td>
+    <td class="meta">${et(t.set_at)}</td>
+    <td><button data-rmt="${t.id}" ${Date.parse(t.game_start) <= Date.now() ? 'disabled title="game started"' : ''}>Remove</button></td></tr>`).join('');
+  $('#noneTotals').classList.toggle('hidden', !!list.length);
+  document.querySelectorAll('[data-rmt]').forEach(b => b.onclick = async () => {
+    b.disabled = true; say('Removing…');
+    try { const j = await api('remove_total', {id: +b.dataset.rmt}); renderActiveTotals(j.totals);
+          say(`Removed. Re-score ${j.run}: the boards update in about 3 minutes.`, 'ok'); }
+    catch (e) { say(e.message, 'err'); b.disabled = false; }
+  });
+}
+
+function renderTotals(){
+  $('#totals').innerHTML = GAMES.map(g => `<tr>
+    <td>${esc(g.away)} @ ${esc(g.home)} <span class="meta">${g.started ? 'started' : 'consensus ' + (CONSENSUS[g.game_id] ?? 'none')}</span></td>
+    <td style="text-align:right;white-space:nowrap">
+      <input class="num" id="t${g.game_id}" type="number" step="0.5" min="4.5" max="9.5" placeholder="Total" ${g.started?'disabled':''}>
+      <input class="num" id="o${g.game_id}" type="number" placeholder="Over" ${g.started?'disabled':''}>
+      <input class="num" id="u${g.game_id}" type="number" placeholder="Under" ${g.started?'disabled':''}>
+      <button data-st="${g.game_id}" ${g.started?'disabled':''}>Save</button></td></tr>`).join('');
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.st;
+    say('Saving…');
+    try {
+      const j = await api('set_total', {game_id: +id, total: $(`#t${id}`).value,
+                                        over_price: $(`#o${id}`).value, under_price: $(`#u${id}`).value});
+      renderActiveTotals(j.totals);
+      say(`Saved. Re-score ${j.run}: the boards update in about 3 minutes.`, 'ok');
+    } catch (e) { say(e.message, 'err'); }
   });
 }
 
@@ -171,7 +224,8 @@ async function unlock(){
     try { sessionStorage.setItem('pl_admin', SECRET); } catch {}
     GAMES = j.games; $('#slate').textContent = `· slate ${j.slate_date}`;
     $('#lock').classList.add('hidden'); $('#panel').classList.remove('hidden');
-    renderGames(); renderActive(j.overrides); say('');
+    CONSENSUS = j.consensus || {};
+    renderGames(); renderTotals(); renderActive(j.overrides); renderActiveTotals(j.totals || []); say('');
   } catch (e) {
     say(e.status === 401 ? 'Wrong passphrase.' : e.message, 'err');
     try { sessionStorage.removeItem('pl_admin'); } catch {}

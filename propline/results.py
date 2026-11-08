@@ -28,9 +28,11 @@ GRADING RULES (how books settle these markets; written down for the guide):
   - SOG board / SOG Lines: no market line exists for player shots in this project, so
     each player is graded against the lines the board shows: his safe line and,
     separately, his aggressive line (e.g. "3+"). No line = not graded.
-  - Total Goals: only games that showed a MODEL LEAN badge, lean side vs the market
-    total, final score including overtime and the shootout (the shootout winner is
-    credited one goal, as in the official final score). Exact line = push = VOID.
+  - Total Goals: only games whose CONSENSUS line produced a MODEL LEAN badge, lean side
+    vs that consensus total, final score including overtime and the shootout (the
+    shootout winner is credited one goal, as in the official final score). Exact line =
+    push = VOID. A manual total from the admin panel changes the display only: it never
+    changes the graded line, the graded side, or which games count.
   - Team Goals: tagged teams vs their tag (Over 2.5 / Over 3.5), and every team with a
     market team total vs that line (over), final score incl. OT and shootout.
   - Moneyline: the stronger side won, incl. OT and shootout.
@@ -157,9 +159,10 @@ def snapshot_rows(day: str, schedule: pd.DataFrame, player_scores: pd.DataFrame,
         for _, r in total_goals.iterrows():
             if int(r["game_id"]) in start:
                 add("total_goals", r["game_id"], "game", r["matchup"], r["away_team"],
-                    r["home_team"], r["rank"], r["score"], r.get("market_total"),
-                    {"lean": r.get("model_lean"), "proj": r.get("proj_total"),
-                     "override": r.get("override_note")})
+                    r["home_team"], r["rank"], r["score"], r.get("market_total_consensus"),
+                    # ALWAYS the consensus line and its lean: a manual total is display only
+                    {"lean": r.get("model_lean_consensus"), "proj": r.get("proj_total"),
+                     "override": r.get("override_note_goalie")})
     tg = (boards or {}).get("team_goals")
     if tg is not None and not tg.empty:
         for _, r in tg.iterrows():
@@ -499,8 +502,9 @@ def boards_as_snapshots(day: str) -> pd.DataFrame:
             rows.append({"board": p, "game_id": r["game_id"], "subject": "game",
                          "subject_name": r["subject"], "team": d.get("away_team"),
                          "opponent": d.get("home_team"), "rank": r["rank"],
-                         "score": r["score"], "line": d.get("market_total"),
-                         "extra": {"lean": d.get("model_lean")}})
+                         "score": r["score"],
+                         "line": d.get("market_total_consensus", d.get("market_total")),
+                         "extra": {"lean": d.get("model_lean_consensus", d.get("model_lean"))}})
         elif p == "team_goals":
             rows.append({"board": p, "game_id": r["game_id"], "subject": d.get("team"),
                          "subject_name": d.get("team"), "team": d.get("team"),

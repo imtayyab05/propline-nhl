@@ -5,6 +5,8 @@
 //   action "roster"  {team}  that club's current goalies and skaters (official NHL feed)
 //   action "set"     {team, player_id, kind: "goalie"|"status", value: "confirmed"|"out"|"in"}
 //   action "remove"  {id}
+//   action "set_total"     {game_id, total, over_price?, under_price?}  his book's game total
+//   action "remove_total"  {id}
 // "set" and "remove" then dispatch a re-score run (run_kind manual_override: no Groq,
 // no odds) so the boards pick the change up within a few minutes.
 //
@@ -130,6 +132,22 @@ const active = day => sb(`manual_overrides?slate_date=eq.${day}&removed_at=is.nu
                          '&select=id,kind,team,player_id,player_name,value,game_start,set_at' +
                          '&order=set_at.asc');
 
+const activeTotals = day => sb(`manual_totals?slate_date=eq.${day}&removed_at=is.null` +
+  '&select=id,game_id,matchup,total,over_price,under_price,game_start,set_at&order=set_at.asc');
+
+// The US consensus total per game, so the panel can show what a manual line replaces.
+async function consensusTotals(day) {
+  const rows = await sb(`market_lines?slate_date=eq.${day}&market=eq.total&side=eq.over&select=game_id,point`);
+  return Object.fromEntries((rows || []).map(r => [r.game_id, r.point]));
+}
+
+// American odds, or blank. Returns undefined when the value is not valid.
+function price(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && Math.abs(n) >= 100 && Math.abs(n) <= 2000 ? n : undefined;
+}
+
 async function rescore() {
   // Never displace a waiting run (it could be the Groq pre-game run): it reads the
   // overrides when it starts, so it already covers this change.
@@ -153,7 +171,8 @@ export default async (req) => {
     const gameOf = team => games.find(g => g.away === team || g.home === team);
 
     if (body.action === 'games') {
-      return json({ slate_date: day, games, overrides: await active(day) });
+      return json({ slate_date: day, games, overrides: await active(day),
+                    totals: await activeTotals(day), consensus: await consensusTotals(day) });
     }
 
     if (body.action === 'roster') {
@@ -198,6 +217,39 @@ export default async (req) => {
       await sb(`manual_overrides?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal',
                                                 body: { removed_at: new Date().toISOString() } });
       return json({ ok: true, run: await rescore(), overrides: await active(day) });
+    }
+
+    if (body.action === 'set_total') {
+      const gid = Number(body.game_id), total = Number(body.total);
+      const over = price(body.over_price), under = price(body.under_price);
+      if (!Number.isInteger(gid) || !Number.isFinite(total) || total < 4.5 || total > 9.5 ||
+          total * 2 !== Math.floor(total * 2)) {
+        return json({ error: 'total must be a half or whole number from 4.5 to 9.5' }, 400);
+      }
+      if (over === undefined || under === undefined) {
+        return json({ error: 'prices must be American odds like -110 or +105, or left blank' }, 400);
+      }
+      const g = games.find(x => x.game_id === gid);
+      if (!g) return json({ error: 'that game is not on today\'s slate' }, 400);
+      if (g.started) return json({ error: 'that game has started; overrides are closed' }, 409);
+      await sb(`manual_totals?slate_date=eq.${day}&game_id=eq.${gid}&removed_at=is.null`,
+               { method: 'PATCH', body: { removed_at: new Date().toISOString() }, prefer: 'return=minimal' });
+      await sb('manual_totals', { method: 'POST', prefer: 'return=minimal', body: {
+        slate_date: day, game_id: gid, matchup: `${g.away} @ ${g.home}`, total,
+        over_price: over, under_price: under, game_start: g.start } });
+      return json({ ok: true, run: await rescore(), totals: await activeTotals(day) });
+    }
+
+    if (body.action === 'remove_total') {
+      const id = Number(body.id);
+      if (!Number.isInteger(id)) return json({ error: 'bad id' }, 400);
+      const rows = await sb(`manual_totals?id=eq.${id}&slate_date=eq.${day}&removed_at=is.null&select=game_start`);
+      if (!rows?.length) return json({ error: 'no such active total today' }, 404);
+      if (Date.parse(rows[0].game_start) <= Date.now())
+        return json({ error: 'that game has started; overrides are closed' }, 409);
+      await sb(`manual_totals?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal',
+                                             body: { removed_at: new Date().toISOString() } });
+      return json({ ok: true, run: await rescore(), totals: await activeTotals(day) });
     }
 
     return json({ error: 'unknown action' }, 400);

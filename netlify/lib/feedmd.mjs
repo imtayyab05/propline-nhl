@@ -28,7 +28,7 @@ export function toMarkdown(f) {
   L.push('time ET | game | status | proj total | market total (over/under) | model lean | stronger side (edge) | market fav | PL');
   for (const g of f.games) {
     const st = g.final ? `final ${g.final}` : g.status;
-    L.push(`${g.time_et} | ${g.away} @ ${g.home} | ${st} | ${n(g.proj_total)} | ${g.mkt_total ?? '-'} (${pr(g.over)}/${pr(g.under)}) | ${g.lean ?? '-'} | ${g.stronger ?? '-'} (${g.edge ?? '-'}) | ${g.mkt_fav ?? '-'} | ${g.pl ?? '-'}`);
+    L.push(`${g.time_et} | ${g.away} @ ${g.home} | ${st} | ${n(g.proj_total)} | ${g.mkt_source === 'manual' ? `${g.mkt_total} manual (consensus ${g.mkt_consensus ?? 'none'})` : (g.mkt_total ?? '-')} (${pr(g.over)}/${pr(g.under)}) | ${g.lean ?? '-'} | ${g.stronger ?? '-'} (${g.edge ?? '-'}) | ${g.mkt_fav ?? '-'} | ${g.pl ?? '-'}`);
   }
   L.push('');
   L.push('## Teams (proj goals | tag | mkt TT | ML | B2B | goalie, adj SV%, conf/conf-manual/proj-firm/proj-lean | out)');

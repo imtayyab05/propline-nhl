@@ -161,7 +161,8 @@ TOTAL_GOALS_COLS = [
     ("combined_xg", "Combined xG/G"),
     # projection + lean (19 Oct 2026): readability only, no score reads them
     ("proj_total", "Projected Total"),
-    ("market_total", "Market Total"), ("model_lean", "Model Lean"),
+    ("market_total", "Market Total"), ("market_total_consensus", "Consensus Total"),
+    ("model_lean", "Model Lean"),
     ("proj_vs_market", "Proj - Market"),
     ("over_price", "Over"), ("under_price", "Under"),
     ("override_note", "Manual"),           # manual overrides (order 4)

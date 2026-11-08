@@ -355,3 +355,44 @@ grant usage, select on all sequences in schema public to service_role;
 -- ai_feed closed to anon (4 Nov 2026): see db/feed_lock.sql
 drop policy if exists "public read" on ai_feed;
 revoke select, insert, update, delete, truncate on ai_feed from anon, authenticated;
+
+-- ============================================================ manual game totals
+-- Same as db/manual_totals.sql (Nov 2026).
+
+create table if not exists manual_totals (
+    id           bigserial primary key,
+    slate_date   date not null,
+    game_id      bigint not null,
+    matchup      text,
+    total        numeric not null check (total between 4.5 and 9.5 and total * 2 = floor(total * 2)),
+    over_price   int check (over_price is null or abs(over_price) between 100 and 2000),
+    under_price  int check (under_price is null or abs(under_price) between 100 and 2000),
+    game_start   timestamptz not null,
+    set_at       timestamptz not null default now(),
+    removed_at   timestamptz
+);
+create unique index if not exists manual_totals_active_uq
+    on manual_totals (slate_date, game_id) where removed_at is null;
+
+create or replace function manual_totals_before_start() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'manual_totals: rows are never deleted; set removed_at';
+  end if;
+  if new.game_start <= now() then
+    raise exception 'manual_totals: game % started at %, too late to change',
+      new.game_id, new.game_start;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists manual_totals_before_start on manual_totals;
+create trigger manual_totals_before_start
+  before insert or update or delete on manual_totals
+  for each row execute function manual_totals_before_start();
+
+alter table manual_totals enable row level security;
+grant select, insert, update, delete on manual_totals to service_role;
+revoke all on manual_totals from anon, authenticated;
+grant usage, select on all sequences in schema public to service_role;

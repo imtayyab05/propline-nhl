@@ -39,7 +39,8 @@ WEAK_SV = 0.888                 # his trailing-script goalie threshold
 
 NOTE = ("Scores = PropLine percentile rank 0-100 within tonight's slate, not probabilities. "
         "proj = PropLine projected goals (GF/xGF vs GA/xGA, goalie, home ice; calibrated "
-        "to league scoring). Market = US consensus game lines; no player prop lines.")
+        "to league scoring). Market = US consensus game lines unless marked manual; no player "
+        "prop lines.")
 
 
 def _r(v, nd=2):
@@ -121,6 +122,9 @@ def build(day: str, schedule: pd.DataFrame, starters: pd.DataFrame, quality: pd.
             "id": gid, "time_et": _et(g.get("game_time_utc")), "away": a, "home": h,
             "status": _status(g.get("state")),
             "proj_total": _r(t.get("proj_total")), "mkt_total": _r(t.get("market_total"), 1),
+            "mkt_source": "manual" if isinstance(t.get("market_total_label"), str) else None,
+            "mkt_consensus": (_r(t.get("market_total_consensus"), 1)
+                              if isinstance(t.get("market_total_label"), str) else None),
             "over": _r(t.get("over_price"), 0), "under": _r(t.get("under_price"), 0),
             "lean": (t.get("model_lean") or "").replace("MODEL LEAN: ", "") or None,
             "stronger": m.get("pick"), "edge": m.get("edge"), "mkt_fav": m.get("market_fav"),

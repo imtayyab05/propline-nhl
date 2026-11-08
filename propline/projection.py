@@ -102,6 +102,52 @@ def project(total_goals: pd.DataFrame, boards: dict, team_tbl: pd.DataFrame,
     return total_goals, boards, c
 
 
+def leans_with_manual_totals(total_goals: pd.DataFrame, boards: dict,
+                             manual: pd.DataFrame | None) -> tuple[pd.DataFrame, dict]:
+    """Model leans against the consensus line, then against any manual total.
+
+    Devin's book can post a different total, so he can enter it in the admin panel.
+    Priority for DISPLAY: manual > consensus. The consensus line and the lean it produces
+    are kept first, untouched, in *_consensus columns: the Results page grades those, so a
+    manual line can never change what is graded or which games count as having a badge.
+    The goalie suppression in add_leans applies to both. No score reads any of this.
+    """
+    total_goals, boards = add_leans(total_goals, boards)
+    if total_goals is None or total_goals.empty or "proj_total" not in total_goals:
+        return total_goals, boards
+    g = total_goals.copy()
+    for c in ("market_total", "over_price", "under_price", "model_lean", "override_note"):
+        if c not in g:
+            g[c] = None
+    g["market_total_consensus"] = g["market_total"]
+    g["model_lean_consensus"] = g["model_lean"]
+    g["override_note_goalie"] = g["override_note"]        # what the Results freeze records
+    g["market_total_label"] = None
+    if manual is None or manual.empty:
+        return g, boards
+
+    g[["market_total", "over_price", "under_price"]] = g[
+        ["market_total", "over_price", "under_price"]].astype(object)
+    g["override_note"] = g["override_note"].astype(object)
+    by_game = {int(r["game_id"]): r for r in manual.to_dict("records")}
+    for i, r in g.iterrows():
+        m = by_game.get(int(r["game_id"]))
+        if m is None:
+            continue
+        total, cons = float(m["total"]), r["market_total_consensus"]
+        has_cons = cons is not None and cons == cons
+        label = (f"{total:g} manual (consensus {float(cons):g})" if has_cons
+                 else f"{total:g} manual (no consensus line)")
+        g.at[i, "market_total"] = total
+        # prices belong to a line: consensus prices beside a manual number would mislead
+        g.at[i, "over_price"] = m.get("over_price")
+        g.at[i, "under_price"] = m.get("under_price")
+        g.at[i, "market_total_label"] = label
+        prior = r["override_note"] if isinstance(r["override_note"], str) else ""
+        g.at[i, "override_note"] = "; ".join(x for x in (prior, f"Market total {label}") if x)
+    return add_leans(g, boards)
+
+
 def add_leans(total_goals: pd.DataFrame, boards: dict) -> tuple[pd.DataFrame, dict]:
     """After market lines are attached. A lean or tag shows only when the gap is at
     least the margin AND every goalie it depends on is a firm projection or confirmed

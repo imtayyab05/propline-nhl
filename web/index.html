@@ -1067,6 +1067,9 @@ const leanBadge = (label, key) => C(label, r=>rawValue(r, key), null, {html: r=>
   const cls = !v ? '' : /UNDER/.test(v) ? 'b-under' : 'b-over';
   return `<td>${v ? `<span class="badge ${cls}">${esc(v)}</span>` : ''}</td>`; }});
 const fromKey = (label, key, fmt) => LEAN_KEYS.has(key) ? leanBadge(label, key)
+  // a manual total reads "6.5 manual (consensus 6)"; it still sorts on the number
+  : key === 'market_total' ? C(label, r=>rawValue(r, key),
+      (v, r)=> rawValue(r, 'market_total_label') || (v ?? ''))
   : key === 'override_note' ? C(label, r=>rawValue(r, key), null, {html: r=>{
       const v = rawValue(r, key);
       return `<td>${v ? `<span class="badge b-manual">${esc(v)}</span>` : ''}</td>`; }})

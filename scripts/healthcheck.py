@@ -405,6 +405,14 @@ def main() -> int:
         reruns = [r for r in a["runs"] if r["run_type"] == "manual_override" and r["stage"] == "processing"]
         bad = [r for r in a["runs"] if r["run_type"] == "manual_override" and r["status"] != "ok"]
         print(f"  re-score runs     {len(reruns)}" + (f", {len(bad)} not ok" if bad else ""))
+        try:
+            mt = read_all("manual_totals", {"select": "removed_at",
+                                            "slate_date": f"gte.{a['since']}"})
+            print(f"  manual totals     {len(mt)}; "
+                  f"{sum(1 for m in mt if m.get('removed_at'))} later removed or replaced"
+                  " (display only; Results grades consensus)")
+        except Exception:  # noqa: BLE001 - table missing until db/manual_totals.sql is run
+            print("  manual totals     NOT SET UP  <-- run db/manual_totals.sql in Supabase")
         touched = read_all("pick_results", {"select": "board", "override": "not.is.null",
                                             "slate_date": f"gte.{a['since']}"})
         print(f"  graded picks      {len(touched)} touched by an override (shown 'manual' on Results)")

@@ -298,3 +298,14 @@ SV .894 (shrunk to league), no NaN on any board. (2) AI feed gated: env **FEED_S
 (Netlify), ?key= or x-feed-key header; read with the service key; ai_feed closed to anon
 (db/feed_lock.sql - run AFTER the deploy). Copy for AI asks once (localStorage
 propline_feed_key) via the Update Now dialog.
+
+**Manual game total (8 Nov 2026, maintenance).** Admin panel "Game totals" -> /api/override
+`set_total` / `remove_total` -> table `manual_totals` (db/manual_totals.sql; 4.5-9.5 in
+halves, optional prices, no anon access, trigger refuses changes after game_start, removal
+sets removed_at). `projection.leans_with_manual_totals`: leans are computed on consensus
+FIRST and kept in `market_total_consensus` / `model_lean_consensus` / `override_note_goalie`;
+then manual > consensus for `market_total`, prices, `model_lean`, `proj_vs_market`,
+`market_total_label` ("6.5 manual (consensus 6)"). No score reads market_total (verified: not
+in any weight, nor in the Groq TOTALS_FIELDS). results.py freezes the *_consensus columns, so a
+manual line can never change the graded line, side, or which games count; a manual total
+does not put the "manual" badge on a graded pick. Goalie lean suppression still applies.

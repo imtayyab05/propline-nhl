@@ -54,7 +54,8 @@ GAME_DETAIL = ["rationale_fp", "home_team", "away_team", "home_gf_pg", "away_gf_
                "away_goalie_sv", "goalies_lean", "combined_pp_threat", "override_note",
                "missing_regulars", "missing_names", "market_total", "over_price",
                "under_price", "combined_xg", "goalie_check",
-               "proj_total", "model_lean", "proj_vs_market"]
+               "proj_total", "model_lean", "proj_vs_market", "market_total_consensus",
+               "model_lean_consensus", "market_total_label"]
 
 # Phase 2 boards. Team boards carry `team` so the dashboard's team filter finds them;
 # every board carries home_team / away_team for the same reason.

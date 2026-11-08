@@ -28,7 +28,7 @@ from propline.trends import (attach_dvp, build_trend_boards, dvp_table,  # noqa:
 from propline.shots import (apply_xg, load_model, player_game_xg,  # noqa: E402
                             player_xg_rates, team_game_xg, team_xg_table)
 from propline.goalies import goalie_quality  # noqa: E402
-from propline import feed, odds, projection, results  # noqa: E402
+from propline import feed, odds, overrides, projection, results  # noqa: E402
 from propline.output import build_picks_workbook  # noqa: E402
 from propline.publish import (previous_rationales, publish_lines,  # noqa: E402
                               publish_slate, read_lines)
@@ -298,7 +298,10 @@ def main() -> int:
         total_goals, game_boards, calib = projection.project(
             total_goals, game_boards, team_tbl, team_logs, season, prev, day,
             quality.attrs.get("league_sv_pct", 0.900))
-        total_goals, game_boards = projection.add_leans(total_goals, game_boards)
+        # a manual total (admin panel) changes the display only; see the function
+        manual_totals = overrides.load_totals(day)
+        total_goals, game_boards = projection.leans_with_manual_totals(
+            total_goals, game_boards, manual_totals)
         lean = total_goals.get("model_lean", pd.Series(dtype=object))
         tags = game_boards.get("team_goals", pd.DataFrame()).get("tt_tag", pd.Series(dtype=object))
         print(f"  ok    projections: league {calib['target']:.2f} goals/team-game "
@@ -424,6 +427,8 @@ def main() -> int:
             except Exception as exc:  # noqa: BLE001
                 written["pick_snapshots"] = f"FAILED {str(exc)[:120]}"
                 print(f"  WARN  pick snapshot failed: {exc}")
+            if not schedule.empty and not manual_totals.empty:
+                written["manual_totals"] = len(manual_totals)
             if feed_doc is not None:
                 try:
                     written["ai_feed"] = upsert("ai_feed", pd.DataFrame([{

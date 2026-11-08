@@ -56,6 +56,27 @@ def load(day: str) -> pd.DataFrame:
     return df
 
 
+TOTAL_COLS = ["game_id", "matchup", "total", "over_price", "under_price", "game_start",
+              "set_at"]
+
+
+def load_totals(day: str) -> pd.DataFrame:
+    """Active manual game totals for the slate, made before their game's start. Empty
+    (with columns) when there are none or the table does not exist yet."""
+    try:
+        rows = read("manual_totals", {"select": ",".join(TOTAL_COLS),
+                                      "slate_date": f"eq.{day}", "removed_at": "is.null",
+                                      "limit": "100"})
+    except Exception as exc:  # noqa: BLE001 - table missing until db/manual_totals.sql is run
+        print(f"  WARN  manual totals unavailable: {exc}")
+        return pd.DataFrame(columns=TOTAL_COLS)
+    df = pd.DataFrame(rows, columns=TOTAL_COLS)
+    if df.empty:
+        return df
+    ok = pd.to_datetime(df["set_at"], utc=True) < pd.to_datetime(df["game_start"], utc=True)
+    return df[ok].copy()
+
+
 def goalie_overrides(ov: pd.DataFrame) -> dict[str, tuple[int, str]]:
     """team -> (goalie_id, name) confirmed manually. The name travels with the id: a
     fresh call-up may not be on the roster feed yet (Brossoit, ANA, 1-2 Nov 2026), and
