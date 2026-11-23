@@ -309,3 +309,14 @@ then manual > consensus for `market_total`, prices, `model_lean`, `proj_vs_marke
 in any weight, nor in the Groq TOTALS_FIELDS). results.py freezes the *_consensus columns, so a
 manual line can never change the graded line, side, or which games count; a manual total
 does not put the "manual" badge on a graded pick. Goalie lean suppression still applies.
+
+**Stats API 100-row cap (found 23 Nov 2026).** Since 19 Nov (first bad run: 19 Nov 21:26 UTC,
+manual_override) api.nhle.com/stats/rest returns at most 100 rows per call whatever `limit`
+says; `total` still gives the real count. nhl._stats returned 100 rows and looked complete:
+the whole season's skater logs came back as 400 rows (4 chunks x 100) and ~291 regulars were
+marked "has not played this season"; all _stats pulls (skater logs, H2H history, goalie and
+team logs) were affected. Fix: _stats pages with `start` (PAGE = 100) and a FIXED sort
+(playerId/teamId + gameId) until it has `total` rows; raises FeedError on a short or
+duplicated result (unsorted paging measured 3,420 rows / 2,734 unique). collect.py now FAILS
+the run (no publish) when more than 2 completed games are missing or have < 30 skater rows.
+Cached last-season files (data/cache/2025*) predate the change and are complete.

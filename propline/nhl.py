@@ -19,6 +19,7 @@ Traps found while probing (Oct 2026), kept here because they WILL bite again:
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ STATS = "https://api.nhle.com/stats/rest/en"
 TIMEOUT = 60
 RETRIES = 3
 ROW_CAP = 10_000
+PAGE = 100                 # the stats API returns at most 100 rows per call (Nov 2026)
 
 # gameType in the schedule feed / gameTypeId in the stats API
 REGULAR, PLAYOFFS = 2, 3
@@ -222,13 +224,47 @@ def _secs(toi) -> int:
 # --- stats REST API -------------------------------------------------------------
 
 def _stats(report: str, cayenne: str, game_level: bool = True) -> list[dict]:
-    """One stats-API report, refusing to return a silently truncated result."""
-    params = {"isAggregate": "false", "isGame": "true" if game_level else "false",
-              "limit": -1, "start": 0, "cayenneExp": cayenne}
-    rows = _get(f"{STATS}/{report}", params).get("data", [])
-    if len(rows) >= ROW_CAP:
-        raise FeedError(f"{report} hit the {ROW_CAP}-row cap for [{cayenne}] — "
-                        f"the pull would be incomplete; use a smaller date chunk")
+    """One stats-API report, paged until it has every row, or an error - never a
+    silently truncated result.
+
+    Since about 20 Nov 2026 the API returns at most 100 rows per call whatever `limit`
+    says, while `total` still gives the real count. The old single call therefore came
+    back with 100 rows and looked complete: a whole season of skater logs arrived as 400
+    rows, and regulars were marked "has not played this season". So: page with `start`
+    until `total` rows are in, with a FIXED sort - unsorted paging was measured to return
+    3,420 rows of which only 2,734 were unique - and check the result is complete and
+    has no duplicates.
+    """
+    key = "teamId" if report.startswith("team/") else "playerId"
+    sort = [{"property": key, "direction": "ASC"}]
+    if game_level:
+        sort.append({"property": "gameId", "direction": "ASC"})
+    rows, total = [], None
+    while True:
+        params = {"isAggregate": "false", "isGame": "true" if game_level else "false",
+                  "limit": PAGE, "start": len(rows), "sort": json.dumps(sort),
+                  "cayenneExp": cayenne}
+        j = _get(f"{STATS}/{report}", params)
+        if total is None:
+            total = j.get("total")
+            if not isinstance(total, int):
+                raise FeedError(f"{report}: no row total in the response for [{cayenne}]")
+            if total >= ROW_CAP:
+                raise FeedError(f"{report} hit the {ROW_CAP}-row cap for [{cayenne}] — "
+                                f"the pull would be incomplete; use a smaller date chunk")
+        page = j.get("data") or []
+        if not page:
+            break
+        rows += page
+        if len(rows) >= total:
+            break
+    if len(rows) != total:
+        raise FeedError(f"{report}: got {len(rows)} of {total} rows for [{cayenne}] "
+                        f"(a page came back empty early)")
+    ids = {(r.get(key), r.get("gameId")) if game_level else r.get(key) for r in rows}
+    if len(ids) != total:
+        raise FeedError(f"{report}: {total - len(ids)} duplicate rows for [{cayenne}] "
+                        f"- paging is not stable")
     return rows
 
 

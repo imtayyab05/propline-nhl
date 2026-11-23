@@ -32,6 +32,9 @@ from propline import overrides  # noqa: E402
 from propline.availability import availability, team_absences  # noqa: E402
 from propline.db import load_env, log_run  # noqa: E402
 from propline.goalies import project_starters  # noqa: E402
+
+MIN_SKATER_ROWS = 30     # a finished game has 36 skater rows; fewer means a cut-off pull
+MAX_GAP_GAMES = 2        # more missing / thin games than this fails the run
 from propline.intermediate import build_intermediate  # noqa: E402
 from propline import nhl  # noqa: E402
 from propline.shots import season_shots  # noqa: E402
@@ -114,9 +117,20 @@ def main() -> int:
     # means the stats API is lagging or a chunk failed — say so, do not score on it.
     done_games = set(team_cur.loc[team_cur["game_date"] < day, "game_id"])
     missing = done_games - set(skater_cur["game_id"])
-    if missing:
-        print(f"  WARN  {len(missing)} completed game(s) have no skater rows yet: "
-              f"{sorted(missing)[:5]}")
+    # A complete game has 36 skater rows (18 a side). A game with far fewer is a cut-off
+    # pull, not a game: in Nov 2026 the stats API began returning 100 rows per call and
+    # whole seasons arrived as a few hundred rows spread thinly across many games.
+    per_game = skater_cur.groupby("game_id").size()
+    thin = sorted(g for g in done_games if 0 < per_game.get(g, 0) < MIN_SKATER_ROWS)
+    if missing or thin:
+        print(f"  WARN  {len(missing)} completed game(s) have no skater rows, {len(thin)} "
+              f"have fewer than {MIN_SKATER_ROWS}: {sorted(missing)[:5]} {thin[:5]}")
+    if len(missing) + len(thin) > MAX_GAP_GAMES:
+        # Fail the run rather than publish boards built on part of the season: an
+        # incomplete pull marks healthy regulars OUT and skews every rate.
+        raise nhl.FeedError(
+            f"skater logs incomplete: {len(missing)} of {len(done_games)} completed games "
+            f"missing and {len(thin)} thin — not publishing on a partial season")
 
     # 3b. Shot locations for this season's finished games — the input to our expected-
     # goals measure (propline/shots.py). Cached: only games finished since the last run
