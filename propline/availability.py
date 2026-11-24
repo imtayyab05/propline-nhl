@@ -36,6 +36,8 @@ When a regular is out, his ice time does not vanish — the coach hands it to te
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 
 RECENT = 10                                # games behind "base" ice time
@@ -47,6 +49,7 @@ DRESSED_PER_TEAM = 20                      # 18 skaters + 2 goalies: a trimmed, 
 EARLY_EXIT_SHARE = 0.5                     # last game's TOI below this share of normal
 EARLY_EXIT_MIN_GAMES = 5                   # games behind "normal" before the rule applies
 EJECTION_PIM = 10                          # a misconduct, not an injury
+TRADE_GRACE_DAYS = 7                       # played elsewhere this recently: traded, not out
 
 AVAIL_COLS = ["team", "player_id", "player_name", "pos_group", "position", "base_toi",
               "base_pp_toi", "regular", "games_missed", "status", "status_source",
@@ -117,15 +120,25 @@ def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
     early = _early_exit(skater_logs, season, day)
     missed, status, source, reason, check, check_note = [], [], [], [], [], []
     for _, p in df.iterrows():
-        team_ids = list(cur_games[cur_games["team"] == p["team"]]
-                        .sort_values("game_date")["game_id"])
-        played = set(cur_sk[(cur_sk["player_id"] == p["player_id"]) &
-                            (cur_sk["team"] == p["team"])]["game_id"])
-        streak = 0
-        for gid in reversed(team_ids):
-            if gid in played:
-                break
-            streak += 1
+        team_games = cur_games[cur_games["team"] == p["team"]].sort_values("game_date")
+        team_ids = list(team_games["game_id"])
+        # His games on ANY team (24 Nov 2026). Counting only games for his current club
+        # charged a traded player with every game his new club had played before he got
+        # there, and marked him OUT on his first night. Only the current club's games
+        # after his last game anywhere count as missed.
+        mine = cur_sk[cur_sk["player_id"] == p["player_id"]]
+        last_any = mine["game_date"].max() if not mine.empty else None
+        played_here = bool((mine["team"] == p["team"]).any())
+        streak = (len(team_ids) if last_any is None
+                  else int((team_games["game_date"] > last_any).sum()))
+        # Played for another club, not yet for this one, and either very recently or
+        # with no game for this club since: a trade, not an absence.
+        traded = (last_any is not None and not played_here and
+                  (streak == 0 or (date.fromisoformat(day) -
+                                   date.fromisoformat(str(last_any)[:10])).days
+                   <= TRADE_GRACE_DAYS))
+        if traded:
+            streak = 0
         missed.append(streak)
 
         gid, tid = team_game[p["team"]]
@@ -150,12 +163,24 @@ def availability(schedule: pd.DataFrame, rosters: pd.DataFrame,
             status.append("in")
             source.append("none")
             reason.append("team has not played yet this season — no absence data")
+        elif traded:
+            status.append("in")
+            source.append("recent_games")
+            reason.append(f"traded, no game for {p['team']} yet "
+                          f"(last played {str(last_any)[:10]} for "
+                          f"{mine.sort_values('game_date')['team'].iloc[-1]})")
         elif streak:
             status.append("out")
             source.append("recent_games")
-            reason.append(f"missed last {streak} game{'s' if streak > 1 else ''}"
-                          if streak < len(team_ids) else
-                          f"has not played for {p['team']} this season")
+            if last_any is None:
+                reason.append("has not played this season")
+            elif not played_here:
+                reason.append(f"missed last {streak} game{'s' if streak > 1 else ''} "
+                              f"(no game for {p['team']} yet; last played "
+                              f"{str(last_any)[:10]} for "
+                              f"{mine.sort_values('game_date')['team'].iloc[-1]})")
+            else:
+                reason.append(f"missed last {streak} game{'s' if streak > 1 else ''}")
         else:
             status.append("in")
             source.append("recent_games")

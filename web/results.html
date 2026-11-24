@@ -96,6 +96,7 @@
     0-100 percentile ratings within each night's slate; these hit rates are a record of
     the boards, not a prediction and not betting advice.</p>
 
+  <p class="lede" id="excluded">19, 21 and 22 Nov excluded: NHL stats feed issue, boards scored on partial data.</p>
   <div class="meta" id="status">loading…</div>
 
   <h2>Hit rate by board</h2>
@@ -167,6 +168,7 @@ const LABELS = {
 const ORDER = Object.keys(LABELS);
 const PLAYER = new Set(['goals','multi_goal','points','multi_point','assists','ppp','sog_safe','sog_aggressive']);
 const RANKED = new Set(['team_goals_total','moneyline','puck_line']);
+const EXCLUDED = new Set(['2026-11-19', '2026-11-21', '2026-11-22']);
 const WINDOWS = [{k:'7', label:'Last 7 days', days:7}, {k:'30', label:'Last 30 days', days:30},
                  {k:'season', label:'Season', days:null}];
 
@@ -321,6 +323,9 @@ async function init(){
   try {
     CFG = await loadConfig();
     ALL = await sbAll('pick_results', {select:'*', order:'slate_date.desc,board.asc,rank.asc'});
+    // Nights scored on bad inputs are left out of every rate and list (rows are kept in
+    // the database). Same list as propline/results.py EXCLUDED_SLATES.
+    ALL = ALL.filter(r => !EXCLUDED.has(r.slate_date));
   } catch (e) {
     ALL = null;                      // a failed load must not read as "nothing graded"
     $('#status').textContent = `Could not load results (${e.message}). Try again shortly.`;

@@ -201,7 +201,8 @@ def track_record(read_all) -> dict:
         return {}
     if rows.empty:
         return {}
-    rows = rows[rows["result"] != "void"]
+    from .results import EXCLUDED_SLATES      # nights scored on bad inputs
+    rows = rows[(rows["result"] != "void") & ~rows["slate_date"].astype(str).isin(EXCLUDED_SLATES)]
     rows["base_p"] = pd.to_numeric(rows["base_p"], errors="coerce")
     cut = (datetime.now(ET).date() - timedelta(days=30)).isoformat()
     out = {}

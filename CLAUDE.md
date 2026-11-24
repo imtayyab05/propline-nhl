@@ -320,3 +320,13 @@ team logs) were affected. Fix: _stats pages with `start` (PAGE = 100) and a FIXE
 duplicated result (unsorted paging measured 3,420 rows / 2,734 unique). collect.py now FAILS
 the run (no publish) when more than 2 completed games are missing or have < 30 skater rows.
 Cached last-season files (data/cache/2025*) predate the change and are complete.
+
+**24 Nov 2026 (Devin-approved).** (1) Track Record excludes 19, 21, 22 Nov (scored on the
+truncated stats data, ~735 picks): `results.EXCLUDED_SLATES` (Python: summarise, feed
+track record) and `EXCLUDED` in web/results.html (page, every rate and list) - keep the two
+lists in sync. Rows are KEPT in pick_snapshots / pick_results. Note line under the page
+header. (2) availability.py: missed games now count only the current club's games AFTER the
+player's last game on ANY team; never played for the current club but played elsewhere
+within TRADE_GRACE_DAYS (7) or with no club game since -> IN "traded, no game for X yet".
+Tested on all 12 multi-team players of 2026-27 (Larkin, Reilly, Crotty, Raty stay OUT
+with honest counts for real absences; Struble, Hunt, Mercer, Wright, Wood, Sasson IN).

@@ -436,10 +436,20 @@ PLAYER_KEYS = {"goals", "multi_goal", "points", "multi_point", "assists", "ppp",
 RANKED = {"team_goals_total", "moneyline", "puck_line"}
 
 
+# Slates left out of every hit rate and base rate (and of the Track Record page; the
+# same list is in web/results.html). Rows are KEPT in pick_snapshots / pick_results.
+EXCLUDED_SLATES = {
+    "2026-11-19": "NHL stats feed issue: boards scored on partial data",
+    "2026-11-21": "NHL stats feed issue: boards scored on partial data",
+    "2026-11-22": "NHL stats feed issue: boards scored on partial data",
+}
+
+
 def summarise(res: pd.DataFrame) -> pd.DataFrame:
     """Hit rate by board and rank bucket, with the base rate beside it."""
     if res is None or res.empty:
         return pd.DataFrame()
+    res = res[~res["slate_date"].astype(str).isin(EXCLUDED_SLATES)]
     live = res[res["result"] != "void"]
     rows = []
     for board, g in live.groupby("board"):
